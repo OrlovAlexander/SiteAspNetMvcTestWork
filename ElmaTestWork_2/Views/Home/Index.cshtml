@@ -1,0 +1,11 @@
+﻿@using Microsoft.AspNet.Identity
+@{
+    ViewBag.Title = "Home Page";
+}
+
+@if (!Request.IsAuthenticated)
+{
+    @*<div class="jumbotron">
+        <p class="lead">Для работы с файловым хранилищем необходимо авторизоваться.</p>
+    </div>*@
+}

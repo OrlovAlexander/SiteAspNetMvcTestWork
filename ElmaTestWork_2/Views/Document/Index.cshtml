@@ -1,0 +1,65 @@
+﻿@model IEnumerable<ElmaTestWork_2.Models.Document>
+@{
+    ViewBag.Title = "Document Page";
+}
+<p></p>
+<div class="row">
+    <div class="col-md-3">
+        <section id="addSection">
+            @Html.Partial("Create", new ElmaTestWork_2.Models.Document())
+        </section>
+    </div>
+    <div class="col-md-6">
+        <section id="tableSection">
+            <table id="filesTable" class="table table-bordered table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>
+                            @Html.DisplayNameFor(model => model.Description)
+                        </th>
+                        <th>
+                            @Html.DisplayNameFor(model => model.Date)
+                        </th>
+                        <th>
+                            @Html.DisplayNameFor(model => model.Author)
+                        </th>
+                        <th></th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model != null)
+                    {
+                        foreach (var item in Model)
+                        {
+                            <tr>
+                                <td>
+                                    <div style="overflow:hidden; text-overflow:ellipsis">
+                                        @Html.DisplayFor(modelItem => item.Description)
+                                    </div>
+                                </td>
+                                <td>
+                                    @Html.DisplayFor(modelItem => item.Date)
+                                </td>
+                                <td>
+                                    @Html.DisplayFor(modelItem => item.Author)
+                                </td>
+                                <td>
+                                    <a class="title" href="/Document/Download/?p=@item.FileName&d=@item.OriginalName"><span><img src="~/Images/icons8-download-24.png" /></span></a>
+                                </td>
+                                <td>
+                                    <a href="javascript:void(0)" data-id="@item.Id" onclick="deleteDocument(this);"><span><img src="~/Images/Files-Delete-File-icon.png" /></span></a>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </section>
+    </div>
+    <div class="col-md-3">
+        <section id="infoSection">
+            @Html.Partial("Information")
+        </section>
+    </div>
+</div>
