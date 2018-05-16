@@ -58,21 +58,30 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Data\NHibernate\INHibernateProviderFactory.cs" />
     <Compile Include="DesignByContract\AssertionException.cs" />
     <Compile Include="DesignByContract\Check.cs" />
     <Compile Include="DesignByContract\DesignByContractException.cs" />
     <Compile Include="DesignByContract\InvariantException.cs" />
     <Compile Include="DesignByContract\PostconditionException.cs" />
     <Compile Include="DesignByContract\PreconditionException.cs" />
-    <Compile Include="Domain\Entity.cs" />
     <Compile Include="Data\NHibernate\UnitOfWork\GenericTransaction.cs" />
     <Compile Include="Data\NHibernate\UnitOfWork\IGenericTransaction.cs" />
+    <Compile Include="Domain\BaseObject.cs" />
+    <Compile Include="Domain\BaseObjectEqualityComparer.cs" />
+    <Compile Include="Domain\DomainSignatureAttribute.cs" />
+    <Compile Include="Domain\Entity.cs" />
+    <Compile Include="Domain\EntityWithTypedId.cs" />
+    <Compile Include="Domain\IEntityWithTypedId.cs" />
+    <Compile Include="Domain\IHasAssignedId.cs" />
+    <Compile Include="Domain\ValidatableObject.cs" />
+    <Compile Include="Domain\ValueObject.cs" />
     <Compile Include="Infrastructure\LocalData\ILocalData.cs" />
     <Compile Include="Data\NHibernate\UnitOfWork\IUnitOfWork.cs" />
     <Compile Include="Data\NHibernate\UnitOfWork\IUnitOfWorkFactory.cs" />
     <Compile Include="Infrastructure\LocalData\Local.cs" />
-    <Compile Include="Data\NHibernate\UnitOfWork\UnitOfWork.cs" />
-    <Compile Include="Data\NHibernate\UnitOfWork\UnitOfWorkFactory.cs" />
+    <Compile Include="Data\NHibernate\UnitOfWork\UnitOfWorkBase.cs" />
+    <Compile Include="Data\NHibernate\UnitOfWork\UnitOfWorkFactoryBase.cs" />
     <Compile Include="Data\NHibernate\UnitOfWork\UnitOfWorkImplementor.cs" />
     <Compile Include="NHibernate\ISessionStorage.cs" />
     <Compile Include="NHibernate\NHibernateSession.cs" />

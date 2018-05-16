@@ -1,4 +1,5 @@
 ﻿using AbstractApplication.NHibernate;
+using ElmaTestWork_2.DAL.NHibernate.UnitOfWork;
 using ElmaTestWork_2.Models;
 using NHibernate;
 using System;
@@ -14,24 +15,31 @@ namespace ElmaTestWork_2.Controllers
 {
     public class DocumentController : Controller
     {
-        private ISession _session { get; set; }
+        private IStoreNHibernateProviderFactory _store { get; set; }
 
-        private ISession AppSession
+        //private ISession AppSession
+        //{
+        //    get
+        //    {
+        //        if (_session == null)
+        //            _session = NHibernateSession.GetSessionForElmaTestWork();
+        //        return _session;
+        //    }
+        //}
+
+        public DocumentController(IStoreNHibernateProviderFactory store)
         {
-            get
-            {
-                if (_session == null)
-                    _session = NHibernateSession.GetSessionForElmaTestWork();
-                return _session;
-            }
+            _store = store;
         }
 
         // GET: Document
         public ActionResult Index()
         {
             IQueryable<Document> documents;
-            documents = AppSession.Query<Document>();
-            AppSession.Flush();
+            using (_store.Start())
+            {
+                documents = _store.Current.Session.Query<Document>();
+            }
             return View(documents.ToList());
         }
 
@@ -76,27 +84,24 @@ namespace ElmaTestWork_2.Controllers
 
                     if (documents.Count > 0)
                     {
-                        ITransaction transaction = AppSession.BeginTransaction(System.Data.IsolationLevel.ReadCommitted);
-                        try
+                        using (_store.Start())
                         {
-                            foreach (Document addedDocument in documents)
-                                AppSession.SaveOrUpdate(addedDocument);
-                            transaction.Commit();
-                        }
-                        catch (Exception ex)
-                        {
-                            transaction.Dispose();
-                            return View("Error", new HandleErrorInfo(ex, "Document", "Create"));
+                            try
+                            {
+                                foreach (Document addedDocument in documents)
+                                    _store.Current.Session.SaveOrUpdate(addedDocument);
+                                _store.Current.TransactionalFlush();
+                            }
+                            catch (Exception ex)
+                            {
+                                return View("Error", new HandleErrorInfo(ex, "Document", "Create"));
+                            }
                         }
                     }
                 }
                 catch (Exception ex)
                 {
                     return View("Error", new HandleErrorInfo(ex, "Document", "Create"));
-                }
-                finally
-                {
-                    AppSession.Flush();
                 }
             }
             return RedirectToAction("Index");
@@ -111,27 +116,26 @@ namespace ElmaTestWork_2.Controllers
             {
                 int fileCount = 0;
                 long fileVolume = 0;
-                IQueryable<Document> documents = AppSession.Query<Document>();
-                foreach (Document document in documents)
+                using (_store.Start())
                 {
-                    var path = Path.Combine(Server.MapPath("~/App_Data/FileStorage/"), document.FileName);
-                    if (System.IO.File.Exists(path))
+                    IQueryable<Document> documents = _store.Current.Session.Query<Document>();
+                    foreach (Document document in documents)
                     {
-                        fileCount++;
-                        System.IO.FileInfo file = new System.IO.FileInfo(path);
-                        fileVolume += file.Length;
+                        var path = Path.Combine(Server.MapPath("~/App_Data/FileStorage/"), document.FileName);
+                        if (System.IO.File.Exists(path))
+                        {
+                            fileCount++;
+                            System.IO.FileInfo file = new System.IO.FileInfo(path);
+                            fileVolume += file.Length;
+                        }
                     }
+                    return Json(new { Result = "OK", Count = fileCount, Volume = BytesToString(fileVolume) });
                 }
-                return Json(new { Result = "OK", Count = fileCount, Volume = BytesToString(fileVolume) });
             }
             catch (Exception ex)
             {
                 Response.StatusCode = (int)HttpStatusCode.BadRequest;
                 return Json(new { Result = "ERROR", Message = ex.Message });
-            }
-            finally
-            {
-                AppSession.Flush();
             }
         }
 
@@ -159,28 +163,26 @@ namespace ElmaTestWork_2.Controllers
             try
             {
                 Document document;
-
-                ITransaction transaction = AppSession.BeginTransaction(System.Data.IsolationLevel.ReadCommitted);
-
-                // Delete from database
-                document = AppSession.Get<Document>(id);
-                if (document == null)
+                using (_store.Start())
                 {
-                    Response.StatusCode = (int)HttpStatusCode.NotFound;
-                    return Json(new { Result = "Error" });
+                    // Delete from database
+                    document = _store.Current.Session.Get<Document>(id);
+                    if (document == null)
+                    {
+                        Response.StatusCode = (int)HttpStatusCode.NotFound;
+                        return Json(new { Result = "Error" });
+                    }
+                    _store.Current.Session.Delete(document);
+
+                    //Delete file from the file system
+                    var path = Path.Combine(Server.MapPath("~/App_Data/FileStorage/"), document.FileName);
+                    if (System.IO.File.Exists(path))
+                    {
+                        System.IO.File.Delete(path);
+                    }
+
+                    _store.Current.TransactionalFlush();
                 }
-                AppSession.Delete(document);
-
-                AppSession.Flush();
-                transaction.Commit();
-
-                //Delete file from the file system
-                var path = Path.Combine(Server.MapPath("~/App_Data/FileStorage/"), document.FileName);
-                if (System.IO.File.Exists(path))
-                {
-                    System.IO.File.Delete(path);
-                }
-
                 return Json(new { Result = "OK" });
             }
             catch (Exception ex)

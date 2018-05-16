@@ -26,7 +26,7 @@ namespace AbstractApplication.Tests
         {
             using (_mocks.Record())
             {
-                Expect.Call(() => _factory.DisposeUnitOfWork(null)).IgnoreArguments();
+                //Expect.Call(() => _factory.DisposeUnitOfWork(null)).IgnoreArguments();
                 Expect.Call(_session.Dispose);
             }
             using (_mocks.Playback())

@@ -6,7 +6,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ElmaTestWork_2.Models
 {
-    public class Document : Entity<string>, IValidatableObject
+    public class Document : EntityWithTypedId<string>, IValidatableObject
     {
         public virtual string OriginalName { get; set; }
 

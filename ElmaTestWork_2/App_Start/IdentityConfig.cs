@@ -1,4 +1,7 @@
 ﻿using AbstractApplication.NHibernate;
+using Autofac;
+using ElmaTestWork_2.App_Start;
+using ElmaTestWork_2.DAL.NHibernate.UnitOfWork;
 using ElmaTestWork_2.Models;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
@@ -39,7 +42,7 @@ namespace ElmaTestWork_2
 
         public static ApplicationUserManager Create(IdentityFactoryOptions<ApplicationUserManager> options, IOwinContext context) 
         {
-            var manager = new ApplicationUserManager(new UserStore<ApplicationUser>(NHibernateSession.GetSessionForAuthentication()));
+            var manager = new ApplicationUserManager(new UserStore<ApplicationUser>(AutofacConfiguration.Current.Resolve<IAuthorityNHibernateProviderFactory>()));
             // Настройка логики проверки имен пользователей
             manager.UserValidator = new UserValidator<ApplicationUser>(manager)
             {

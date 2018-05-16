@@ -1,5 +1,4 @@
-﻿using AbstractApplication.NHibernate;
-using ElmaTestWork_2.App_Start;
+﻿using ElmaTestWork_2.App_Start;
 using log4net.Config;
 using Microsoft.Owin;
 using Owin;
@@ -11,6 +10,11 @@ namespace ElmaTestWork_2
     {
         public void Configuration(IAppBuilder app)
         {
+            // OWIN MVC SETUP:
+            // Register the Autofac middleware FIRST, then the Autofac MVC middleware.
+            app.UseAutofacMiddleware(AutofacConfiguration.Current);
+            app.UseAutofacMvc();
+
             XmlConfigurator.Configure();
             ConfigureAuth(app);
             ConfigureData();
@@ -18,7 +22,7 @@ namespace ElmaTestWork_2
 
         private static void ConfigureData()
         {
-            NHibernateSession.Initialize(System.Web.HttpContext.Current.ApplicationInstance);
+            //NHibernateSession.Initialize(System.Web.HttpContext.Current.ApplicationInstance);
             DataConfiguration.Configure();
         }
     }

@@ -1,14 +1,13 @@
-﻿using NHibernate;
-using NHibernate.Cfg;
+﻿using System;
 
 namespace AbstractApplication.Data.NHibernate.UnitOfWork
 {
-    public interface IUnitOfWorkFactory
+    public interface IUnitOfWorkFactory : IDisposable
     {
         IUnitOfWork Create();
-        Configuration Configuration { get; }
-        ISessionFactory SessionFactory { get; }
-        ISession CurrentSession { get; set; }
-        void DisposeUnitOfWork(UnitOfWorkImplementor adapter);
+        void ConfigurationUp();
+        //ISessionFactory SessionFactory { get; }
+        //ISession CurrentSession { get; set; }
+        //void DisposeUnitOfWork(UnitOfWorkImplementor adapter);
     }
 }

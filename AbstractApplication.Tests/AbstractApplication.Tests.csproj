@@ -74,6 +74,7 @@
     <Reference Include="System.Data" />
     <Reference Include="System.ServiceModel" />
     <Reference Include="System.Transactions" />
+    <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Domain_LocalDataFixture_Tests.cs" />
@@ -81,6 +82,8 @@
     <Compile Include="Domain_UnitOfWorkFixture_Tests.cs" />
     <Compile Include="Domain_UnitOfWorkImplementorFixture_Tests.cs" />
     <Compile Include="Domain_UnitOfWorkUsege_Tests.cs" />
+    <Compile Include="Model\UnitOfWorkFactoryFake.cs" />
+    <Compile Include="Model\UnitOfWorkFake.cs" />
     <Compile Include="Person.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

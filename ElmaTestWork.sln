@@ -11,6 +11,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AbstractApplication", "Abst
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AbstractApplication.Tests", "AbstractApplication.Tests\AbstractApplication.Tests.csproj", "{20CBF27E-A5AA-4C14-9D40-8477041796F1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NHibernate.AspNet.Identity", "NHibernate.AspNet.Identity\NHibernate.AspNet.Identity.csproj", "{C620FAAE-F1B6-479E-9959-C46C20ED0A8A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NHibernate.AspNet.Identity.Tests", "NHibernate.AspNet.Identity.Tests\NHibernate.AspNet.Identity.Tests.csproj", "{4AB55157-6F8F-423C-9C6F-A3A92B2101CE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -33,6 +37,14 @@ Global
 		{20CBF27E-A5AA-4C14-9D40-8477041796F1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{20CBF27E-A5AA-4C14-9D40-8477041796F1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{20CBF27E-A5AA-4C14-9D40-8477041796F1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C620FAAE-F1B6-479E-9959-C46C20ED0A8A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C620FAAE-F1B6-479E-9959-C46C20ED0A8A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C620FAAE-F1B6-479E-9959-C46C20ED0A8A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C620FAAE-F1B6-479E-9959-C46C20ED0A8A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4AB55157-6F8F-423C-9C6F-A3A92B2101CE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4AB55157-6F8F-423C-9C6F-A3A92B2101CE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4AB55157-6F8F-423C-9C6F-A3A92B2101CE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4AB55157-6F8F-423C-9C6F-A3A92B2101CE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

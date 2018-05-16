@@ -5,12 +5,12 @@ namespace AbstractApplication.Data.NHibernate.UnitOfWork
 {
     public class UnitOfWorkImplementor : IUnitOfWork
     {
-        private readonly IUnitOfWorkFactory _factory;
+        //private readonly IUnitOfWorkFactory _factory;
         private readonly ISession _session;
 
         public UnitOfWorkImplementor(IUnitOfWorkFactory factory, ISession session)
         {
-            _factory = factory;
+            //_factory = factory;
             _session = session;
         }
 
@@ -56,25 +56,26 @@ namespace AbstractApplication.Data.NHibernate.UnitOfWork
             }
         }
 
-        public IUnitOfWorkFactory Factory
-        {
-            get { return _factory; }
-        }
-
         public ISession Session
         {
             get { return _session; }
         }
 
-        public void Flush()
-        {
-            _session.Flush();
-        }
-
         public void Dispose()
         {
-            _factory.DisposeUnitOfWork(this);
+            //_factory.DisposeUnitOfWork(this);
+            //_factory.Dispose();
             _session.Dispose();
         }
+
+        //public IUnitOfWorkFactory Factory
+        //{
+        //    get { return _factory; }
+        //}
+
+        //public void Flush()
+        //{
+        //    _session.Flush();
+        //}
     }
 }
