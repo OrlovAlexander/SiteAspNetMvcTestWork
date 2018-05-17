@@ -1,4 +1,5 @@
 ﻿using AbstractApplication.Data.NHibernate.UnitOfWork;
+using AbstractApplication.Tests.Model;
 using NUnit.Framework;
 using System;
 
@@ -8,20 +9,13 @@ namespace AbstractApplication.Tests
     public class Domain_UnitOfWorkFactoryFixture_Tests
     {
         private IUnitOfWorkFactory _factory;
+        private UnitOfWorkFake _fake;
 
         [SetUp]
         public void SetupContext()
         {
-            _factory = (IUnitOfWorkFactory)Activator.CreateInstance(typeof(UnitOfWorkFactoryBase), true);
-        }
-
-        [Test]
-        public void Can_create_unit_of_work()
-        {
-            IUnitOfWork implementor = _factory.Create();
-            Assert.IsNotNull(implementor);
-            //Assert.IsNotNull(_factory.CurrentSession);
-            //Assert.AreEqual(FlushMode.Commit, _factory.CurrentSession.FlushMode);
+            _factory = new UnitOfWorkFactoryFake();
+            _fake = new UnitOfWorkFake(_factory, "test");
         }
 
         [Test]
@@ -38,6 +32,16 @@ namespace AbstractApplication.Tests
             //                configuration.Properties["connection.driver_class"]);
             //Assert.AreEqual("Server=(local);Database=Test;Integrated Security=SSPI;",
             //                configuration.Properties["connection.connection_string"]);
+        }
+
+        [Test]
+        public void Can_create_unit_of_work()
+        {
+            _factory.ConfigurationUp();
+            IUnitOfWork implementor = _factory.Create(_fake);
+            Assert.IsNotNull(implementor);
+            //Assert.IsNotNull(_factory.CurrentSession);
+            //Assert.AreEqual(FlushMode.Commit, _factory.CurrentSession.FlushMode);
         }
 
         //[Test]

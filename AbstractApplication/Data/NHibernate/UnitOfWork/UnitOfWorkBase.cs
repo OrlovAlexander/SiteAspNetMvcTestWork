@@ -18,9 +18,9 @@ namespace AbstractApplication.Data.NHibernate.UnitOfWork
         public IUnitOfWork Start()
         {
             if (CurrentUnitOfWork != null)
-                throw new InvalidOperationException("You cannot start more than one unit of work at the same time.");
+                throw new InvalidOperationException("You cannot start more than one unit of work at the same time per one thread.");
 
-            CurrentUnitOfWork = _unitOfWorkFactory.Create();
+            CurrentUnitOfWork = _unitOfWorkFactory.Create(this);
             return CurrentUnitOfWork;
         }
 

@@ -21,12 +21,19 @@ namespace AbstractApplication.Tests
             _session = _mocks.DynamicMock<ISession>();
         }
 
+        [TearDown]
+        public void TearDownContext()
+        {
+            _mocks.VerifyAll();
+        }
+
         [Test]
         public void Can_Dispose_UnitOfWorkImplementor()
         {
             using (_mocks.Record())
             {
                 //Expect.Call(() => _factory.DisposeUnitOfWork(null)).IgnoreArguments();
+                Expect.Call(_factory.Dispose);
                 Expect.Call(_session.Dispose);
             }
             using (_mocks.Playback())

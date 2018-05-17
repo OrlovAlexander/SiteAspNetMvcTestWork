@@ -14,16 +14,16 @@ namespace AbstractApplication.Tests.Model
 
         public override void ConfigurationUp()
         {
-            base.Configuration = new Configuration();
+            base._configuration = new Configuration();
             string hibernateConfig = Default_HibernateConfig;
             //if not rooted, assume path from base directory
             if (Path.IsPathRooted(hibernateConfig) == false)
                 hibernateConfig = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, hibernateConfig);
             if (File.Exists(hibernateConfig))
-                base.Configuration.Configure(new XmlTextReader(hibernateConfig));
+                base._configuration.Configure(new XmlTextReader(hibernateConfig));
 
-            base.Configuration.AddAssembly(Assembly.GetExecutingAssembly());
-            new SchemaExport(base.Configuration).Execute(false, true, false);
+            base._configuration.AddAssembly(Assembly.GetExecutingAssembly());
+            new SchemaExport(base._configuration).Execute(false, true, false);
         }
     }
 }

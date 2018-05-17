@@ -9,38 +9,31 @@ namespace AbstractApplication.Data.NHibernate.UnitOfWork
 {
     public abstract class UnitOfWorkFactoryBase : IUnitOfWorkFactory
     {
-        protected ISessionFactory SessionFactory;
-        protected Configuration Configuration;
+        protected INHibernateProviderFactory _nHibernateProviderFactory;
+        protected ISessionFactory _sessionFactory;
+        protected Configuration _configuration;
 
         public abstract void ConfigurationUp();
 
-        public IUnitOfWork Create()
+        public IUnitOfWork Create(INHibernateProviderFactory nHibernateProviderFactory)
         {
-            Check.Require(Configuration != null, "Configuration is null.");
+            Check.Require(_configuration != null, "Configuration is null.");
+            Check.Require(nHibernateProviderFactory != null, "NHibernateProviderFactory is null.");
 
-            if (SessionFactory == null)
-                SessionFactory = Configuration.BuildSessionFactory();
+            _nHibernateProviderFactory = nHibernateProviderFactory;
 
-            ISession session = SessionFactory.OpenSession();
+            if (_sessionFactory == null)
+                _sessionFactory = _configuration.BuildSessionFactory();
+
+            ISession session = _sessionFactory.OpenSession();
             session.FlushMode = FlushMode.Commit;
             return new UnitOfWorkImplementor(this, session);
         }
 
         public void Dispose()
         {
-            throw new NotImplementedException();
+            _nHibernateProviderFactory.Dispose();
         }
-
-        //public ISession CurrentSession
-        //{
-        //    get
-        //    {
-        //        if (_currentSession == null)
-        //            throw new InvalidOperationException("You are not in a unit of work.");
-        //        return _currentSession;
-        //    }
-        //    set { _currentSession = value; }
-        //}
 
         //public void DisposeUnitOfWork(UnitOfWorkImplementor adapter)
         //{

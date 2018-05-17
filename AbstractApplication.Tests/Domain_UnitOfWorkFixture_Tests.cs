@@ -23,10 +23,11 @@ namespace AbstractApplication.Tests
             _unitOfWork = _mocks.DynamicMock<IUnitOfWork>();
             _session = _mocks.DynamicMock<ISession>();
 
-            _fake = new UnitOfWorkFake(new UnitOfWorkFactoryFake(), "test");
+            _fake = new UnitOfWorkFake(_factory, "test");
+            _fake.Configuration();
 
             _mocks.BackToRecordAll();
-            SetupResult.For(_factory.Create()).Return(_unitOfWork);
+            SetupResult.For(_factory.Create(_fake)).Return(_unitOfWork);
             _mocks.ReplayAll();
         }
 
@@ -39,13 +40,18 @@ namespace AbstractApplication.Tests
         [Test]
         public void Can_Start_UnitOfWork()
         {
+            var factory = _mocks.DynamicMock<IUnitOfWorkFactory>();
+            var unitOfWork = _mocks.DynamicMock<IUnitOfWork>();
+            var fake = new UnitOfWorkFake(factory, "test");
+
             using (_mocks.Record())
             {
-                Expect.Call(_factory.Create()).Return(_unitOfWork);
+                Expect.Call(factory.Create(fake)).IgnoreArguments().Return(unitOfWork);
             }
             using (_mocks.Playback())
             {
-                var uow = _fake.Start();
+                fake.Configuration();
+                var uow = fake.Start();
             }
         }
 

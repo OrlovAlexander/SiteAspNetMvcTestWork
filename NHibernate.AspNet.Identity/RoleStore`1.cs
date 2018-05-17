@@ -111,10 +111,15 @@ namespace NHibernate.AspNet.Identity
             get
             {
                 this.ThrowIfDisposed();
-                using (NHibernateProviderFactory.Start())
+
+                if (!NHibernateProviderFactory.IsStarted)
                 {
-                    return NHibernateProviderFactory.Current.Session.Query<TRole>();
+                    using (NHibernateProviderFactory.Start())
+                    {
+                        return NHibernateProviderFactory.Current.Session.Query<TRole>().ToList().AsQueryable();
+                    } 
                 }
+                return NHibernateProviderFactory.Current.Session.Query<TRole>().ToList().AsQueryable();
             }
         }
     }

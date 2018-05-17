@@ -297,7 +297,11 @@ namespace NHibernate.AspNet.Identity
                 throw new ArgumentException(Resources.ValueCannotBeNullOrEmpty, "role");
             }
 
-            IdentityRole identityRole = Queryable.SingleOrDefault<IdentityRole>(NHibernateProviderFactory.Current.Session.Query<IdentityRole>(), (Expression<Func<IdentityRole, bool>>)(r => r.Name.ToUpper() == role.ToUpper()));
+            IdentityRole identityRole;
+            using (NHibernateProviderFactory.Start())
+            {
+                identityRole = Queryable.SingleOrDefault<IdentityRole>(NHibernateProviderFactory.Current.Session.Query<IdentityRole>(), (Expression<Func<IdentityRole, bool>>)(r => r.Name.ToUpper() == role.ToUpper())); 
+            }
             if (identityRole == null)
             {
                 throw new InvalidOperationException(string.Format((IFormatProvider)CultureInfo.CurrentCulture, Resources.RoleNotFound, new object[1] { (object)role }));
@@ -416,7 +420,15 @@ namespace NHibernate.AspNet.Identity
             get
             {
                 this.ThrowIfDisposed();
-                return NHibernateProviderFactory.Current.Session.Query<TUser>();
+
+                if (!NHibernateProviderFactory.IsStarted)
+                {
+                    using (NHibernateProviderFactory.Start())
+                    {
+                        return NHibernateProviderFactory.Current.Session.Query<TUser>().ToList().AsQueryable();
+                    }
+                }
+                return NHibernateProviderFactory.Current.Session.Query<TUser>().ToList().AsQueryable();
             }
         }
 
@@ -628,12 +640,15 @@ namespace NHibernate.AspNet.Identity
         {
             return Task.Run(() =>
             {
-                // no cartesian product, batch call. Don't know if it's really needed: should we eager load or let lazy loading do its stuff?
-                var query = NHibernateProviderFactory.Current.Session.Query<TUser>().Where(filter);
-                query.Fetch(p => p.Roles).ToFuture();
-                query.Fetch(p => p.Claims).ToFuture();
-                query.Fetch(p => p.Logins).ToFuture();
-                return query.ToFuture().FirstOrDefault();
+                using (NHibernateProviderFactory.Start())
+                {
+                    // no cartesian product, batch call. Don't know if it's really needed: should we eager load or let lazy loading do its stuff?
+                    var query = NHibernateProviderFactory.Current.Session.Query<TUser>().Where(filter);
+                    query.Fetch(p => p.Roles).ToFuture();
+                    query.Fetch(p => p.Claims).ToFuture();
+                    query.Fetch(p => p.Logins).ToFuture();
+                    return query.ToFuture().FirstOrDefault(); 
+                }
             });
         }
     }

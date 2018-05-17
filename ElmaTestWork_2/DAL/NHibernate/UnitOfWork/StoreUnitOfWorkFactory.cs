@@ -14,7 +14,7 @@ namespace ElmaTestWork_2.DAL.NHibernate.UnitOfWork
         public override void ConfigurationUp()
         {
             //string path = Path.Combine(AppDomain.CurrentDomain.GetData("APPBASE").ToString(), "appSchema.sql");
-            base.Configuration = Fluently.Configure(ConfigureNHibernate(Path.Combine(AppDomain.CurrentDomain.GetData("APPBASE").ToString(), "AppHibernate.cfg.xml"), null))
+            base._configuration = Fluently.Configure(ConfigureNHibernate(Path.Combine(AppDomain.CurrentDomain.GetData("APPBASE").ToString(), "AppHibernate.cfg.xml"), null))
                 .Mappings(m =>
                 {
                     m.FluentMappings.Add<DocumentMap>();

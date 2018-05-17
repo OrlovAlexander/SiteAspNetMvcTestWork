@@ -18,7 +18,7 @@ namespace ElmaTestWork_2.DAL.NHibernate.UnitOfWork
 
             //string path = Path.Combine(AppDomain.CurrentDomain.GetData("APPBASE").ToString(), "schema.sql");
             var mapping = MappingHelper.GetIdentityMappings(internalTypes);
-            base.Configuration = Fluently.Configure(ConfigureNHibernate(mapping))
+            base._configuration = Fluently.Configure(ConfigureNHibernate(mapping))
                 //.ExposeConfiguration(cfg => new SchemaExport(cfg).SetOutputFile(path).Create(true, true))
                 .ExposeConfiguration(cfg => new SchemaUpdate(cfg).Execute(false, true))
                 .BuildConfiguration();

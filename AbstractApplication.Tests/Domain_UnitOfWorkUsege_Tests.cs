@@ -17,6 +17,7 @@ namespace AbstractApplication.Tests
         public void SetupContext()
         {
             _fake = new UnitOfWorkFake(new UnitOfWorkFactoryFake(), "test");
+            _fake.Configuration();
         }
 
         [Test]
