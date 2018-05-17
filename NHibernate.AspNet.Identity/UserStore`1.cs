@@ -30,7 +30,7 @@ namespace NHibernate.AspNet.Identity
         {
             if (nHibernateProviderFactory == null)
             {
-                throw new ArgumentNullException("nHibernateProviderFactory");
+                throw new ArgumentNullException("NHibernateProviderFactory is null");
             }
 
             this.ShouldDisposeSession = true;

@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNet.Identity;
+﻿using AbstractApplication.Data.NHibernate;
+using Microsoft.AspNet.Identity;
 using System;
 using System.Linq;
 using System.Linq.Expressions;
@@ -9,33 +10,39 @@ namespace NHibernate.AspNet.Identity
     public class RoleStore<TRole> : IQueryableRoleStore<TRole>, IRoleStore<TRole>, IDisposable where TRole : IdentityRole
     {
         private bool _disposed;
+        private INHibernateProviderFactory NHibernateProviderFactory { get; set; }
 
         /// <summary>
         /// If true then disposing this object will also dispose (close) the session. False means that external code is responsible for disposing the session.
         /// </summary>
         public bool ShouldDisposeSession { get; set; }
 
-        public ISession Context { get; private set; }
-
-        public RoleStore(ISession context)
+        public RoleStore(INHibernateProviderFactory nHibernateProviderFactory)
         {
-            if (context == null)
-                throw new ArgumentNullException("context");
+            if (nHibernateProviderFactory == null)
+                throw new ArgumentNullException("NHibernateProviderFactory is null");
 
             ShouldDisposeSession = true;
-            this.Context = context;
+            NHibernateProviderFactory = nHibernateProviderFactory;
+            NHibernateProviderFactory.Configuration();
         }
 
         public virtual Task<TRole> FindByIdAsync(string roleId)
         {
             this.ThrowIfDisposed();
-            return Task.FromResult(Context.Get<TRole>((object)roleId));
+            using (NHibernateProviderFactory.Start())
+            {
+                return Task.FromResult(NHibernateProviderFactory.Current.Session.Get<TRole>((object)roleId));
+            }
         }
 
         public virtual Task<TRole> FindByNameAsync(string roleName)
         {
             this.ThrowIfDisposed();
-            return Task.FromResult<TRole>(Queryable.FirstOrDefault<TRole>(Queryable.Where<TRole>(this.Context.Query<TRole>(), (Expression<Func<TRole, bool>>)(u => u.Name.ToUpper() == roleName.ToUpper()))));
+            using (NHibernateProviderFactory.Start())
+            {
+                return Task.FromResult<TRole>(Queryable.FirstOrDefault<TRole>(Queryable.Where<TRole>(NHibernateProviderFactory.Current.Session.Query<TRole>(), (Expression<Func<TRole, bool>>)(u => u.Name.ToUpper() == roleName.ToUpper()))));
+            }
         }
 
         public virtual  Task CreateAsync(TRole role)
@@ -43,8 +50,11 @@ namespace NHibernate.AspNet.Identity
             this.ThrowIfDisposed();
             if ((object)role == null)
                 throw new ArgumentNullException("role");
-            Context.Save(role);
-            Context.Flush();
+            using (NHibernateProviderFactory.Start())
+            {
+                NHibernateProviderFactory.Current.Session.Save(role);
+                NHibernateProviderFactory.Current.TransactionalFlush();
+            }
             return Task.FromResult(0);
         }
 
@@ -55,8 +65,11 @@ namespace NHibernate.AspNet.Identity
             {
                 throw new ArgumentNullException("role");
             }
-            Context.Delete(role);
-            Context.Flush();
+            using (NHibernateProviderFactory.Start())
+            {
+                NHibernateProviderFactory.Current.Session.Delete(role);
+                NHibernateProviderFactory.Current.TransactionalFlush();
+            }
             return Task.FromResult(0);
         }
 
@@ -65,8 +78,11 @@ namespace NHibernate.AspNet.Identity
             this.ThrowIfDisposed();
             if ((object)role == null)
                 throw new ArgumentNullException("role");
-            Context.Update(role);
-            Context.Flush();
+            using (NHibernateProviderFactory.Start())
+            {
+                NHibernateProviderFactory.Current.Session.Update(role);
+                NHibernateProviderFactory.Current.TransactionalFlush();
+            }
             return Task.FromResult(0);
         }
 
@@ -85,9 +101,9 @@ namespace NHibernate.AspNet.Identity
         protected virtual void Dispose(bool disposing)
         {
             if (disposing && !this._disposed && ShouldDisposeSession)
-                this.Context.Dispose();
+                NHibernateProviderFactory.Dispose();
             this._disposed = true;
-            this.Context = (ISession)null;
+            NHibernateProviderFactory = null;
         }
 
         public IQueryable<TRole> Roles
@@ -95,7 +111,10 @@ namespace NHibernate.AspNet.Identity
             get
             {
                 this.ThrowIfDisposed();
-                return this.Context.Query<TRole>();
+                using (NHibernateProviderFactory.Start())
+                {
+                    return NHibernateProviderFactory.Current.Session.Query<TRole>();
+                }
             }
         }
     }

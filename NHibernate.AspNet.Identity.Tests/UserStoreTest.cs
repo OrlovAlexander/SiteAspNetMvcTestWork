@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNet.Identity;
+﻿using AbstractApplication.Data.NHibernate;
+using Microsoft.AspNet.Identity;
+using NHibernate.AspNet.Identity.Tests.Model;
 using NHibernate.AspNet.Identity.Tests.Models;
 using NUnit.Framework;
 using System;
@@ -15,27 +17,27 @@ namespace NHibernate.AspNet.Identity.Tests
     [TestClass]
     public class UserStoreTest
     {
-        ISession _session;
+        INHibernateProviderFactory _store;
 
         [TestInitialize]
         public void Initialize()
         {
-            var factory = SessionFactoryProvider.Instance.SessionFactory;
-            _session = factory.OpenSession();
-            SessionFactoryProvider.Instance.BuildSchema();
+            _store = new UnitOfWorkFake(new UnitOfWorkFactoryFake(), "test");
+            _store.Configuration();
         }
 
         [TestCleanup]
         public void Cleanup()
         {
-            _session.Close();
+            _store.Dispose();
+            _store = null;
         }
 
         [TestMethod]
         public void WhenHaveNoUser()
         {
             var login = new UserLoginInfo("ProviderTest", "ProviderKey");
-            var store = new UserStore<IdentityUser>(_session);
+            var store = new UserStore<IdentityUser>(_store);
             var user = store.FindAsync(login).Result;
 
             Assert.IsNull(user);
@@ -46,7 +48,7 @@ namespace NHibernate.AspNet.Identity.Tests
         {
             var user = new IdentityUser("Lukz");
             var login = new UserLoginInfo("ProviderTest02", "ProviderKey02");
-            var store = new UserStore<IdentityUser>(_session);
+            var store = new UserStore<IdentityUser>(_store);
             using (var ts = new TransactionScope(TransactionScopeOption.RequiresNew))
             {
                 var result = store.AddLoginAsync(user, login);
@@ -54,7 +56,11 @@ namespace NHibernate.AspNet.Identity.Tests
                 Assert.IsNull(result.Exception);
             }
 
-            var actual = _session.Query<IdentityUser>().FirstOrDefault(x => x.UserName == user.UserName);
+            IdentityUser actual;
+            using (_store.Start())
+            {
+                actual = _store.Current.Session.Query<IdentityUser>().FirstOrDefault(x => x.UserName == user.UserName);
+            }
             var userStored = store.FindAsync(login).Result;
 
             Assert.IsNotNull(actual);
@@ -67,7 +73,7 @@ namespace NHibernate.AspNet.Identity.Tests
         {
             var user = new IdentityUser("Lukz 03");
             var login = new UserLoginInfo("ProviderTest03", "ProviderKey03");
-            var store = new UserStore<IdentityUser>(_session);
+            var store = new UserStore<IdentityUser>(_store);
             store.AddLoginAsync(user, login);
 
             Assert.IsTrue(user.Logins.Any());
@@ -79,14 +85,18 @@ namespace NHibernate.AspNet.Identity.Tests
                 Assert.IsNull(result.Exception);
             }
 
-            var actual = _session.Query<IdentityUser>().FirstOrDefault(x => x.UserName == user.UserName);
+            IdentityUser actual;
+            using (_store.Start())
+            {
+                actual = _store.Current.Session.Query<IdentityUser>().FirstOrDefault(x => x.UserName == user.UserName);
+            }
             Assert.IsFalse(actual.Logins.Any());
         }
 
         [TestMethod]
         public void WhenCreateUserAsync()
         {
-            var userManager = new UserManager<ApplicationUser>(new UserStore<ApplicationUser>(_session));
+            var userManager = new UserManager<ApplicationUser>(new UserStore<ApplicationUser>(_store));
             var user = new ApplicationUser() { UserName = "RealUserName" };
 
             using (var transaction = new TransactionScope())
@@ -96,7 +106,9 @@ namespace NHibernate.AspNet.Identity.Tests
                 Assert.AreEqual(0, result.Errors.Count());
             }
 
-            var actual = _session.Query<ApplicationUser>().FirstOrDefault(x => x.UserName == user.UserName);
+            ApplicationUser actual;
+            using (_store.Start())
+                actual = _store.Current.Session.Query<ApplicationUser>().FirstOrDefault(x => x.UserName == user.UserName);
 
             Assert.IsNotNull(actual);
             Assert.AreEqual(user.UserName, actual.UserName);
@@ -107,21 +119,27 @@ namespace NHibernate.AspNet.Identity.Tests
         {
             var user = new IdentityUser("Lukz 04");
             var role = new IdentityRole("ADM");
-            var store = new UserStore<IdentityUser>(_session);
-            var roleStore = new RoleStore<IdentityRole>(_session);
+            var store = new UserStore<IdentityUser>(_store);
+            var roleStore = new RoleStore<IdentityRole>(_store);
 
             roleStore.CreateAsync(role);
             store.CreateAsync(user);
             store.AddToRoleAsync(user, "ADM");
 
-            Assert.IsTrue(_session.Query<IdentityRole>().Any(x => x.Name == "ADM"));
-            Assert.IsTrue(_session.Query<IdentityUser>().Any(x => x.UserName == "Lukz 04"));
+            using (_store.Start())
+            {
+                Assert.IsTrue(_store.Current.Session.Query<IdentityRole>().Any(x => x.Name == "ADM"));
+                Assert.IsTrue(_store.Current.Session.Query<IdentityUser>().Any(x => x.UserName == "Lukz 04"));
+            }
 
             var result = store.DeleteAsync(user);
 
             Assert.IsNull(result.Exception);
-            Assert.IsFalse(this._session.Query<IdentityUser>().Any(x => x.UserName == "Lukz 04"));
-            Assert.IsTrue(this._session.Query<IdentityRole>().Any(x => x.Name == "ADM"));
+            using (_store.Start())
+            {
+                Assert.IsFalse(this._store.Current.Session.Query<IdentityUser>().Any(x => x.UserName == "Lukz 04"));
+                Assert.IsTrue(this._store.Current.Session.Query<IdentityRole>().Any(x => x.Name == "ADM"));
+            }
         }
 
         [TestMethod]
@@ -129,23 +147,26 @@ namespace NHibernate.AspNet.Identity.Tests
         {
             var user = new IdentityUser("Lukz 05");
             var role = new IdentityRole("ADM05");
-            var store = new UserStore<IdentityUser>(_session);
-            var roleStore = new RoleStore<IdentityRole>(_session);
+            var store = new UserStore<IdentityUser>(_store);
+            var roleStore = new RoleStore<IdentityRole>(_store);
 
             roleStore.CreateAsync(role);
             store.CreateAsync(user);
             store.AddToRoleAsync(user, "ADM05");
 
-            Assert.IsTrue(_session.Query<IdentityRole>().Any(x => x.Name == "ADM05"));
-            Assert.IsTrue(_session.Query<IdentityUser>().Any(x => x.UserName == "Lukz 05"));
-            Assert.IsTrue(store.IsInRoleAsync(user, "ADM05").Result);
+            using (_store.Start())
+            {
+                Assert.IsTrue(_store.Current.Session.Query<IdentityRole>().Any(x => x.Name == "ADM05"));
+                Assert.IsTrue(_store.Current.Session.Query<IdentityUser>().Any(x => x.UserName == "Lukz 05"));
+                Assert.IsTrue(store.IsInRoleAsync(user, "ADM05").Result);
+            }
 
             var result = store.RemoveFromRoleAsync(user, "ADM05");
 
             Assert.IsNull(result.Exception);
             Assert.IsFalse(store.IsInRoleAsync(user, "ADM05").Result);
-            Assert.IsTrue(_session.Query<IdentityUser>().Any(x => x.UserName == "Lukz 05"));
-            Assert.IsTrue(_session.Query<IdentityRole>().Any(x => x.Name == "ADM05"));
+            Assert.IsTrue(_store.Current.Session.Query<IdentityUser>().Any(x => x.UserName == "Lukz 05"));
+            Assert.IsTrue(_store.Current.Session.Query<IdentityRole>().Any(x => x.Name == "ADM05"));
         }
 
         [TestMethod]
@@ -156,8 +177,8 @@ namespace NHibernate.AspNet.Identity.Tests
             var user3 = new IdentityUser("Win 02");
             var user4 = new IdentityUser("Andre 03");
             var role = new IdentityRole("ADM");
-            var store = new UserStore<IdentityUser>(this._session);
-            var roleStore = new RoleStore<IdentityRole>(this._session);
+            var store = new UserStore<IdentityUser>(this._store);
+            var roleStore = new RoleStore<IdentityRole>(this._store);
 
             roleStore.CreateAsync(role);
             store.CreateAsync(user1);
@@ -169,10 +190,13 @@ namespace NHibernate.AspNet.Identity.Tests
             store.AddToRoleAsync(user3, "ADM");
             store.AddToRoleAsync(user4, "ADM");
 
-            Assert.IsTrue(this._session.Query<IdentityRole>().Any(x => x.Name == "ADM"));
-            Assert.IsTrue(this._session.Query<IdentityUser>().Any(x => x.UserName == "Lukz 04"));
+            using (_store.Start())
+            {
+                Assert.IsTrue(this._store.Current.Session.Query<IdentityRole>().Any(x => x.Name == "ADM"));
+                Assert.IsTrue(this._store.Current.Session.Query<IdentityUser>().Any(x => x.UserName == "Lukz 04"));
 
-            Assert.IsTrue(this._session.Query<IdentityUser>().Any(x => x.UserName == "Andre 03"));
+                Assert.IsTrue(this._store.Current.Session.Query<IdentityUser>().Any(x => x.UserName == "Andre 03"));
+            }
 
             var resul = store.Users;
 
@@ -188,8 +212,8 @@ namespace NHibernate.AspNet.Identity.Tests
             var user4 = new IdentityUser("Andre 03");
             var role = new IdentityRole("ADM");
             var role2 = new IdentityRole("USR");
-            var store = new UserStore<IdentityUser>(this._session);
-            var roleStore = new RoleStore<IdentityRole>(this._session);
+            var store = new UserStore<IdentityUser>(this._store);
+            var roleStore = new RoleStore<IdentityRole>(this._store);
 
             roleStore.CreateAsync(role);
             roleStore.CreateAsync(role2);
@@ -204,10 +228,13 @@ namespace NHibernate.AspNet.Identity.Tests
             store.AddToRoleAsync(user1, "USR");
             store.AddToRoleAsync(user4, "USR");
 
-            Assert.IsTrue(this._session.Query<IdentityRole>().Any(x => x.Name == "ADM"));
-            Assert.IsTrue(this._session.Query<IdentityUser>().Any(x => x.UserName == "Lukz 04"));
+            using (_store.Start())
+            {
+                Assert.IsTrue(this._store.Current.Session.Query<IdentityRole>().Any(x => x.Name == "ADM"));
+                Assert.IsTrue(this._store.Current.Session.Query<IdentityUser>().Any(x => x.UserName == "Lukz 04"));
 
-            Assert.IsTrue(this._session.Query<IdentityUser>().Any(x => x.UserName == "Andre 03"));
+                Assert.IsTrue(this._store.Current.Session.Query<IdentityUser>().Any(x => x.UserName == "Andre 03"));
+            }
 
             var resul = roleStore.Roles;
 
@@ -217,7 +244,7 @@ namespace NHibernate.AspNet.Identity.Tests
         [TestMethod]
         public void LockoutAccount()
         {
-            var userManager = new UserManager<ApplicationUser>(new UserStore<ApplicationUser>(this._session));
+            var userManager = new UserManager<ApplicationUser>(new UserStore<ApplicationUser>(this._store));
             userManager.MaxFailedAccessAttemptsBeforeLockout = 3;
             userManager.UserLockoutEnabledByDefault = true;
             userManager.DefaultAccountLockoutTimeSpan = new TimeSpan(0, 10, 0);
@@ -235,7 +262,7 @@ namespace NHibernate.AspNet.Identity.Tests
         [TestMethod]
         public void FindByName()
         {
-            var userManager = new UserManager<ApplicationUser>(new UserStore<ApplicationUser>(this._session));
+            var userManager = new UserManager<ApplicationUser>(new UserStore<ApplicationUser>(this._store));
             userManager.Create(new ApplicationUser() { UserName = "test", Email = "aaa@bbb.com", EmailConfirmed = true }, "Welcome");
             var x = userManager.FindByName("tEsT");
             Assert.IsNotNull(x);
@@ -245,8 +272,8 @@ namespace NHibernate.AspNet.Identity.Tests
         [TestMethod]
         public void FindByNameWithRoles()
         {
-            var userManager = new UserManager<ApplicationUser>(new UserStore<ApplicationUser>(this._session));
-            var roleManager = new RoleManager<IdentityRole>(new RoleStore<IdentityRole>(this._session));
+            var userManager = new UserManager<ApplicationUser>(new UserStore<ApplicationUser>(this._store));
+            var roleManager = new RoleManager<IdentityRole>(new RoleStore<IdentityRole>(this._store));
             roleManager.Create(new IdentityRole("Admin"));
             roleManager.Create(new IdentityRole("AO"));
             var user = new ApplicationUser() { UserName = "test", Email = "aaa@bbb.com", EmailConfirmed = true };
@@ -254,8 +281,8 @@ namespace NHibernate.AspNet.Identity.Tests
             userManager.AddToRole(user.Id, "Admin");
             userManager.AddToRole(user.Id, "AO");
             // clear session
-            this._session.Flush();
-            this._session.Clear();
+            this._store.Current.Session.Flush();
+            this._store.Current.Session.Clear();
 
             var x = userManager.FindByName("tEsT");
             Assert.IsNotNull(x);
@@ -265,7 +292,7 @@ namespace NHibernate.AspNet.Identity.Tests
         [TestMethod]
         public void FindByEmail()
         {
-            var userManager = new UserManager<ApplicationUser>(new UserStore<ApplicationUser>(this._session));
+            var userManager = new UserManager<ApplicationUser>(new UserStore<ApplicationUser>(this._store));
             userManager.Create(new ApplicationUser() { UserName = "test", Email = "aaa@bbb.com", EmailConfirmed = true }, "Welcome");
             var x = userManager.FindByEmail("AaA@bBb.com");
             Assert.IsNotNull(x);
@@ -275,7 +302,7 @@ namespace NHibernate.AspNet.Identity.Tests
         [TestMethod]
         public void AddClaim()
         {
-            var userManager = new UserManager<ApplicationUser>(new UserStore<ApplicationUser>(this._session));
+            var userManager = new UserManager<ApplicationUser>(new UserStore<ApplicationUser>(this._store));
             var user = new ApplicationUser() { UserName = "test", Email = "aaa@bbb.com", EmailConfirmed = true };
             userManager.Create(user, "Welcome");
             userManager.AddClaim(user.Id, new Claim(ClaimTypes.Role, "Admin"));
@@ -285,7 +312,7 @@ namespace NHibernate.AspNet.Identity.Tests
         [TestMethod]
         public void EmailConfirmationToken()
         {
-            var userManager = new UserManager<ApplicationUser>(new UserStore<ApplicationUser>(this._session));
+            var userManager = new UserManager<ApplicationUser>(new UserStore<ApplicationUser>(this._store));
             userManager.UserTokenProvider = new EmailTokenProvider<ApplicationUser, string>() { BodyFormat = "xxxx {0}", Subject = "Reset password" };
             userManager.Create(new ApplicationUser() { UserName = "test", Email = "aaa@bbb.com", EmailConfirmed = false }, "Welcome");
             var x = userManager.FindByEmail("aaa@bbb.com");
@@ -296,8 +323,8 @@ namespace NHibernate.AspNet.Identity.Tests
         [TestMethod]
         public void FindByEmailAggregated()
         {
-            var userManager = new UserManager<ApplicationUser>(new UserStore<ApplicationUser>(this._session));
-            var roleManager = new RoleManager<IdentityRole>(new RoleStore<IdentityRole>(this._session));
+            var userManager = new UserManager<ApplicationUser>(new UserStore<ApplicationUser>(this._store));
+            var roleManager = new RoleManager<IdentityRole>(new RoleStore<IdentityRole>(this._store));
             userManager.Create(new ApplicationUser() { UserName = "test", Email = "aaa@bbb.com", EmailConfirmed = true }, "Welcome");
             var x = userManager.FindByEmail("aaa@bbb.com");
             roleManager.CreateAsync(new IdentityRole("Admin"));
@@ -305,7 +332,7 @@ namespace NHibernate.AspNet.Identity.Tests
             userManager.AddClaim(x.Id, new Claim("role", "user"));
             userManager.AddToRole(x.Id, "Admin");
             userManager.AddLogin(x.Id, new UserLoginInfo("facebook", "1234"));
-            this._session.Clear();
+            this._store.Current.Session.Clear();
             x = userManager.FindByEmail("aaa@bbb.com");
             Assert.IsNotNull(x);
             Assert.AreEqual(2, x.Claims.Count);
@@ -316,12 +343,12 @@ namespace NHibernate.AspNet.Identity.Tests
         [TestMethod]
         public void CreateWithoutCommitingTransactionScopeShouldNotInsertRows()
         {
-            var userManager = new UserManager<ApplicationUser>(new UserStore<ApplicationUser>(this._session));
-            var roleManager = new RoleManager<IdentityRole>(new RoleStore<IdentityRole>(this._session));
+            var userManager = new UserManager<ApplicationUser>(new UserStore<ApplicationUser>(this._store));
+            var roleManager = new RoleManager<IdentityRole>(new RoleStore<IdentityRole>(this._store));
             using (var ts = new TransactionScope(TransactionScopeOption.RequiresNew))
             {
                 // session is not opened inside the scope so we need to enlist it manually
-                ((System.Data.Common.DbConnection)_session.Connection).EnlistTransaction(System.Transactions.Transaction.Current);
+                ((System.Data.Common.DbConnection)_store.Current.Session.Connection).EnlistTransaction(System.Transactions.Transaction.Current);
                 userManager.Create(new ApplicationUser() { UserName = "test", Email = "aaa@bbb.com", EmailConfirmed = true }, "Welcome1");
                 var x = userManager.FindByEmail("aaa@bbb.com");
                 roleManager.Create(new IdentityRole("Admin"));
@@ -337,9 +364,9 @@ namespace NHibernate.AspNet.Identity.Tests
         [TestMethod]
         public void CreateWithoutCommitingNHibernateTransactionShouldNotInsertRows()
         {
-            var userManager = new UserManager<ApplicationUser>(new UserStore<ApplicationUser>(this._session));
-            var roleManager = new RoleManager<IdentityRole>(new RoleStore<IdentityRole>(this._session));
-            using (var ts = _session.BeginTransaction())
+            var userManager = new UserManager<ApplicationUser>(new UserStore<ApplicationUser>(this._store));
+            var roleManager = new RoleManager<IdentityRole>(new RoleStore<IdentityRole>(this._store));
+            using (var ts = _store.Current.Session.BeginTransaction())
             {
                 userManager.Create(new ApplicationUser() { UserName = "test", Email = "aaa@bbb.com", EmailConfirmed = true }, "Welcome1");
                 var x = userManager.FindByEmail("aaa@bbb.com");
