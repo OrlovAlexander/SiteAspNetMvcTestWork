@@ -85,7 +85,7 @@
         var $el = $(el);
         var $errorContainer = $el.siblings('.error');
         if (!$errorContainer.length) {
-            $errorContainer = $('<span class="error"></span>').insertAfter($el);
+            $errorContainer = $('<span class="error text-danger"></span>').insertAfter($el);
         }
         $errorContainer.text($(el).data('errorMessage'));
     };
@@ -116,8 +116,11 @@
 
     function validateDescription() {
         var description = document.getElementById('Description');
-        var valid = description.value.length < 300;
-        if (!valid) {
+        var valid = description.value.length > 0 && description.value.length <= 300;
+        if (description.value.length === 0) {
+            setErrorMessage(description, 'Заполните поле Описание документа.');
+        }
+        if (description.value.length > 300) {
             setErrorMessage(description, 'Превышен размер поля в 300 символов.');
         }
         return valid;
