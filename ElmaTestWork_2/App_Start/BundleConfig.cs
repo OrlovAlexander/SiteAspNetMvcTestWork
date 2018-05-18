@@ -15,7 +15,8 @@ namespace ElmaTestWork_2
                         "~/Scripts/jquery.validate*"));
 
             bundles.Add(new ScriptBundle("~/bundles/site").Include(
-                      "~/Scripts/Site.js"));
+                      "~/Scripts/Site.js",
+                      "~/Scripts/SiteInformationTimer.js"));
 
             bundles.Add(new ScriptBundle("~/bundles/datatables").Include(
                       "~/DataTables/datatables.min.js",

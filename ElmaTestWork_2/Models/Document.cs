@@ -11,11 +11,11 @@ namespace ElmaTestWork_2.Models
         public virtual string OriginalName { get; set; }
 
         [Display(Name = "Название документа")]
-        [Required(ErrorMessage = "Пожалуйства укажите название документа.")]
+        [Required(ErrorMessage = "Укажите название документа.")]
         [MaxLength(300, ErrorMessage = "Максимальная длина не должна превышать 300 символов.")]
         public virtual string Description { get; set; }
 
-        [Display(Name = "Дата документа: ")]
+        [Display(Name = "Дата документа")]
         public virtual DateTime Date { get; set; }
 
         [Display(Name = "Автор")]

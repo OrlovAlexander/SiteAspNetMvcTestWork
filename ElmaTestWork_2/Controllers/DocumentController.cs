@@ -1,7 +1,5 @@
-﻿using AbstractApplication.NHibernate;
-using ElmaTestWork_2.DAL.NHibernate.UnitOfWork;
+﻿using ElmaTestWork_2.DAL.NHibernate.UnitOfWork;
 using ElmaTestWork_2.Models;
-using NHibernate;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -17,19 +15,10 @@ namespace ElmaTestWork_2.Controllers
     {
         private IStoreNHibernateProviderFactory _store { get; set; }
 
-        //private ISession AppSession
-        //{
-        //    get
-        //    {
-        //        if (_session == null)
-        //            _session = NHibernateSession.GetSessionForElmaTestWork();
-        //        return _session;
-        //    }
-        //}
-
         public DocumentController(IStoreNHibernateProviderFactory store)
         {
             _store = store;
+            _store.Configuration();
         }
 
         // GET: Document
@@ -38,71 +27,77 @@ namespace ElmaTestWork_2.Controllers
             IQueryable<Document> documents;
             using (_store.Start())
             {
-                documents = _store.Current.Session.Query<Document>();
+                documents = _store.Current.Session.Query<Document>().ToList().AsQueryable();
             }
             return View(documents.ToList());
         }
 
-        // GET: Document/Create
-        public ActionResult Create()
-        {
-            return View();
-        }
+        //// GET: Document/Create
+        //public ActionResult Create()
+        //{
+        //    return View();
+        //}
 
         // POST: Document/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
         public ActionResult Create(Document document)
         {
-            if (ModelState.IsValid)
+            if (Request.Files.Count == 0)
             {
-                try
+                ModelState.AddModelError("FileName", "Необходимо выбрать файл.");
+            }
+
+            if (!ModelState.IsValid)
+            {
+                return PartialView(document);
+            }
+            try
+            {
+                List<Document> documents = new List<Document>();
+                for (int i = 0; i < Request.Files.Count; i++)
                 {
-                    List<Document> documents = new List<Document>();
-                    for (int i = 0; i < Request.Files.Count; i++)
+                    HttpPostedFileBase file = Request.Files[i];
+
+                    if (file != null && file.ContentLength > 0)
                     {
-                        HttpPostedFileBase file = Request.Files[i];
-
-                        if (file != null && file.ContentLength > 0)
+                        var fileName = Path.GetFileName(file.FileName);
+                        Document newDocument = new Document()
                         {
-                            var fileName = Path.GetFileName(file.FileName);
-                            Document newDocument = new Document()
-                            {
-                                Author = User.Identity.Name,
-                                Date = document.Date,
-                                OriginalName = fileName,
-                                Description = document.Description,
-                                FileName = Guid.NewGuid().ToString("D")
-                            };
-                            documents.Add(newDocument);
-                            Debug.WriteLine($"Document FileName {newDocument.FileName}");
+                            Author = User.Identity.Name,
+                            Date = document.Date,
+                            OriginalName = fileName,
+                            Description = document.Description,
+                            FileName = Guid.NewGuid().ToString("D")
+                        };
+                        documents.Add(newDocument);
+                        Debug.WriteLine($"Document FileName {newDocument.FileName}");
 
-                            var path = Path.Combine(Server.MapPath("~/App_Data/FileStorage/"), newDocument.FileName);
-                            file.SaveAs(path);
-                        }
+                        var path = Path.Combine(Server.MapPath("~/App_Data/FileStorage/"), newDocument.FileName);
+                        file.SaveAs(path);
                     }
+                }
 
-                    if (documents.Count > 0)
+                if (documents.Count > 0)
+                {
+                    using (_store.Start())
                     {
-                        using (_store.Start())
+                        try
                         {
-                            try
-                            {
-                                foreach (Document addedDocument in documents)
-                                    _store.Current.Session.SaveOrUpdate(addedDocument);
-                                _store.Current.TransactionalFlush();
-                            }
-                            catch (Exception ex)
-                            {
-                                return View("Error", new HandleErrorInfo(ex, "Document", "Create"));
-                            }
+                            foreach (Document addedDocument in documents)
+                                _store.Current.Session.SaveOrUpdate(addedDocument);
+                            _store.Current.TransactionalFlush();
+                        }
+                        catch (Exception ex)
+                        {
+                            return View("Error", new HandleErrorInfo(ex, "Document", "Create"));
                         }
                     }
                 }
-                catch (Exception ex)
-                {
-                    return View("Error", new HandleErrorInfo(ex, "Document", "Create"));
-                }
+            }
+            catch (Exception ex)
+            {
+                return View("Error", new HandleErrorInfo(ex, "Document", "Create"));
             }
             return RedirectToAction("Index");
         }

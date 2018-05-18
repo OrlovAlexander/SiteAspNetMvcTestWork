@@ -1,9 +1,7 @@
 ﻿using AbstractApplication.DesignByContract;
 using NHibernate;
 using NHibernate.Cfg;
-using System;
-using System.IO;
-using System.Xml;
+using System.Diagnostics;
 
 namespace AbstractApplication.Data.NHibernate.UnitOfWork
 {
@@ -32,7 +30,8 @@ namespace AbstractApplication.Data.NHibernate.UnitOfWork
 
         public void Dispose()
         {
-            _nHibernateProviderFactory.Dispose();
+            Debug.WriteLine($"-Dispose - UnitOfWorkFactory");
+            _nHibernateProviderFactory?.Dispose();
         }
 
         //public void DisposeUnitOfWork(UnitOfWorkImplementor adapter)

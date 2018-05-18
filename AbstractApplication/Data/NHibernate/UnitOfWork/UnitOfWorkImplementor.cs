@@ -1,5 +1,6 @@
 ﻿using NHibernate;
 using System.Data;
+using System.Diagnostics;
 
 namespace AbstractApplication.Data.NHibernate.UnitOfWork
 {
@@ -63,7 +64,7 @@ namespace AbstractApplication.Data.NHibernate.UnitOfWork
 
         public void Dispose()
         {
-            //_factory.DisposeUnitOfWork(this);
+            Debug.WriteLine($"-Dispose - UnitOfWorkImplementor");
             _factory.Dispose();
             _session.Dispose();
         }

@@ -1,5 +1,6 @@
 ﻿using AbstractApplication.Infrastructure.LocalData;
 using System;
+using System.Diagnostics;
 
 namespace AbstractApplication.Data.NHibernate.UnitOfWork
 {
@@ -52,6 +53,7 @@ namespace AbstractApplication.Data.NHibernate.UnitOfWork
 
         public void Dispose()
         {
+            Debug.WriteLine($"-Dispose - {_currentUnitOfWorkKey}, INHibernateProviderFactory");
             CurrentUnitOfWork = null;
         }
 

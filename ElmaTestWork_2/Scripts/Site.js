@@ -17,11 +17,13 @@ $.ajaxPrefilter(
             if (token !== null) {
                 if (options.data.indexOf("X-Requested-With") === -1) {
                     options.data = "X-Requested-With=XMLHttpRequest" + (options.data === "" ? "" : "&" + options.data);
-                 }
-                 options.data = options.data + "&" + token.name + '=' + token.value;
-             }
-         }
-     }
+                }
+                if (options.data.indexOf("RequestVerificationToken") === -1) {
+                    options.data = options.data + "&" + token.name + '=' + token.value;
+                }
+            }
+        }
+    }
 );
 
 var deleteDocument = function (context) {
@@ -45,33 +47,21 @@ var deleteDocument = function (context) {
     }
 };
 
-var informationTimer = function () {
-    setTimeout(function tick() {
-        if (document.getElementById("infoSection") !== undefined) {
-            informationStore();
-        }
-        informationTimer = setTimeout(tick, 1000);
-    }, 1000);
-};
-
-var informationStore = function () {
-    var newUrl = document.URL += "/InformationStore";
+$(document).on("submit", "#formCreate", function (event) {
+    event.preventDefault();
     $.ajax({
-        url: newUrl,
-        type: 'POST',
-        data: {}
-    }).done(function (data) {
-        if (data.Result === "OK") {
-            document.getElementById("fileCount").innerText = data.Count;
-            document.getElementById("fileVolume").innerText = data.Volume;
+        url: $(this).attr("action"),
+        type: $(this).attr("method"),
+        data: $(this).serialize(),
+        success: function (data, status) {
+            console.info(data);
+            $("#addSection").replaceWith(data);
+        },
+        error: function (xhr, desc, err) {
+            console.error(err+":"+desc);
         }
-        else if (data.Result !== undefined) {
-            console.error(data.Result.Message);
-        }
-        }).fail(function () {
-            console.error("There is something wrong. Please try again.");
     });
-};
+});
 
 $(document).ready(function () {
     $('#filesTable').DataTable({

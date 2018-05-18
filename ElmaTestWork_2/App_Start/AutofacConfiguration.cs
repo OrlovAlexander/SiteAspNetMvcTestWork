@@ -21,10 +21,10 @@ namespace ElmaTestWork_2.App_Start
 
         private static ContainerBuilder AutofacConfigure(this ContainerBuilder builder)
         {
-            builder.RegisterType<AuthorityUnitOfWorkFactory>().As<IAuthorityUnitOfWorkFactory>().InstancePerRequest();
-            builder.RegisterType<AuthorityNHibernateProviderFactory>().As<IAuthorityNHibernateProviderFactory>().InstancePerRequest();
-            builder.RegisterType<StoreUnitOfWorkFactory>().As<IStoreUnitOfWorkFactory>().InstancePerRequest();
-            builder.RegisterType<StoreNHibernateProviderFactory>().As<IStoreNHibernateProviderFactory>().InstancePerRequest();
+            builder.RegisterType<AuthorityUnitOfWorkFactory>().As<IAuthorityUnitOfWorkFactory>();
+            builder.RegisterType<AuthorityNHibernateProviderFactory>().As<IAuthorityNHibernateProviderFactory>();
+            builder.RegisterType<StoreUnitOfWorkFactory>().As<IStoreUnitOfWorkFactory>();
+            builder.RegisterType<StoreNHibernateProviderFactory>().As<IStoreNHibernateProviderFactory>();
             return builder;
         }
 
