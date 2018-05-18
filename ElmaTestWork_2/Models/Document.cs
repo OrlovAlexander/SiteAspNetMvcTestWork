@@ -8,8 +8,6 @@ namespace ElmaTestWork_2.Models
 {
     public class Document : EntityWithTypedId<string>, IValidatableObject
     {
-        public virtual string OriginalName { get; set; }
-
         [Display(Name = "Название документа")]
         [Required(ErrorMessage = "Укажите название документа.")]
         [MaxLength(300, ErrorMessage = "Максимальная длина не должна превышать 300 символов.")]
@@ -22,6 +20,10 @@ namespace ElmaTestWork_2.Models
         public virtual string Author { get; set; }
 
         public virtual string FileName { get; set; }
+
+        public virtual string OriginalName { get; set; }
+
+        public virtual string Files { get; set; } = "";
 
         public virtual IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
         {

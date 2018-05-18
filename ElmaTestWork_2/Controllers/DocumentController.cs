@@ -45,7 +45,7 @@ namespace ElmaTestWork_2.Controllers
         {
             if (Request.Files.Count == 0)
             {
-                ModelState.AddModelError("FileName", "Необходимо выбрать файл.");
+                ModelState.AddModelError("Files", "Необходимо выбрать файл.");
             }
 
             if (!ModelState.IsValid)
