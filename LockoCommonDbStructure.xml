@@ -1,0 +1,155 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<root uid="{FD6FF26E-0DDB-410F-82C7-F133F1E48E0E}">
+  <methods>
+    <method name="CreateGroups123" />
+    <method name="CreateRegionalDirectorsSupportDesignGroups1" />
+    <method name="CreateGroups822" />
+  </methods>
+  <views>
+    <view name="RecordIdsType">
+      <text>
+        <![CDATA[
+IF type_id('dbo.Record_Ids') IS NULL        
+  CREATE TYPE dbo.Record_Ids AS TABLE (
+       Id int NOT NULL PRIMARY KEY
+  )
+      ]]>
+      </text>
+    </view>
+  </views>
+  <procedures>
+    <procedure name="Locko_PrepareDealScore">
+      <text>
+        <![CDATA[
+CREATE PROCEDURE dbo.Locko_PrepareDealScore
+AS
+ SET NOCOUNT ON;
+ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED
+BEGIN
+ SELECT
+  -- Номер договора
+  contract_number = cb.Number,
+  scoring = tp.Scoring
+ FROM dbo.Locko_Application la
+ LEFT JOIN dbo.M_LA_TransactionParticipants AS tps
+  ON la.Id = tps.Parent
+ LEFT JOIN dbo.Locko_TransactionParticipant AS tp
+  ON tps.Child = tp.Id
+ LEFT JOIN dbo.Locko_ContractBase AS cb
+  ON la.CreditContract = cb.Id
+ WHERE tp.TransactionRole = 2
+  AND la.ApplicationStatus = 9
+ RETURN 0
+END
+          ]]>
+      </text>
+    </procedure>
+    <procedure name="Locko_GetApplicationInfo">
+      <text>
+        <![CDATA[
+    CREATE PROC dbo.Locko_GetApplicationInfo
+    @record_id int
+    AS
+    SET NOCOUNT ON
+    SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED
+    BEGIN
+
+    SELECT
+    record_id = a.Id,
+    -- Номер заявки
+    number = a.ApplicationNumber,
+    -- Дата создания заявки
+    date_create = a.CreationDate,
+    -- Клиент
+    client_name = tp.FullName,
+    -- Наименование
+    name = a.Name,
+    -- Подразделение
+    branch_name = b.Name,
+    -- Филиал
+    filial_name = f.Name,
+    -- Регион
+    region_name = r.Name,
+    -- Статус
+    status = st.Name
+    FROM dbo.Locko_Application a
+    LEFT JOIN Locko_ApplicationStatus st
+    ON st.Id = a.ApplicationStatus
+    LEFT JOIN dbo.v_Locko_TransactionParticipants tp
+    ON tp.Application = a.Id
+    AND tp.TransactionRole = 2 -- основной заёмщик
+    LEFT JOIN dbo.Locko_Branch b
+    ON b.Id = a.Branch
+    LEFT JOIN dbo.Locko_Branch f
+    ON f.Id = a.Filial
+    LEFT JOIN dbo.Locko_Branch r
+    ON r.Id = a.Region
+    WHERE a.Id = @record_id
+
+    RETURN 0
+    END
+          ]]>
+    </text>
+   </procedure>
+    <procedure name="Locko_GetApplicationsInfos">
+      <text>
+        <![CDATA[
+CREATE PROC dbo.Locko_GetApplicationsInfos
+    @record_ids Record_Ids READONLY
+AS
+SET NOCOUNT ON
+SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED
+BEGIN
+
+    SELECT 
+        record_id = a.Id,
+        -- Номер заявки
+        number = a.ApplicationNumber,
+        -- Дата создания заявки
+        date_create = a.CreationDate,
+        -- Клиент
+        client_name = tp.FullName,
+        -- Наименование
+        name = a.Name,
+        -- Подразделение
+        branch_name = b.Name,
+        -- Филиал
+        filial_name = f.Name,
+        -- Регион
+        region_name = r.Name,
+        -- Статус
+        status = st.Name
+    FROM dbo.Locko_Application a
+        INNER JOIN @record_ids rec
+        ON rec.Id = a.Id
+        LEFT JOIN Locko_ApplicationStatus st
+        ON st.Id = a.ApplicationStatus
+        LEFT JOIN dbo.v_Locko_TransactionParticipants tp
+        ON tp.Application = a.Id
+            AND tp.TransactionRole = 2 -- основной заёмщик
+        LEFT JOIN dbo.Locko_Branch b
+        ON b.Id = a.Branch
+        LEFT JOIN dbo.Locko_Branch f
+        ON f.Id = a.Filial
+        LEFT JOIN dbo.Locko_Branch r
+        ON r.Id = a.Region
+
+    RETURN 0
+END
+        
+          ]]>
+      </text>
+    </procedure>    
+  </procedures>
+  <scripts>
+    <script name="ix_PublicClientSession__SessionToken" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+CREATE NONCLUSTERED INDEX ix_PublicClientSession__SessionToken 
+ON [dbo].[PublicClientSession] ([SessionToken])  
+WITH (ONLINE=ON) 
+        ]]>
+      </text>
+    </script>
+  </scripts>
+</root>

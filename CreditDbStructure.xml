@@ -1,0 +1,3805 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<root uid="{1A752692-6239-448A-95A3-DD441C06A4B3}">
+  <methods>
+    <method name="CreateWorkflowProcessType1" />
+    <method name="CreateDocumentType1" />
+    <method name="CreateUserGroups5" />
+    <method name="CreateCodeIndices" ExecuteTime="OnIndexesCreated" AlwaysExecute="true" />
+    <method name="CreateDSSIndices" ExecuteTime="OnIndexesCreated" AlwaysExecute="true" />
+    <method name="CreateIBSIndices" ExecuteTime="OnIndexesCreated" AlwaysExecute="true" />
+    <method name="CreateTaskListForCheckIndices" ExecuteTime="OnIndexesCreated" AlwaysExecute="true" />
+    <method name="TrimStringCodes" ExecuteTime="OnTablesDeleted" />
+  </methods>
+ 
+  <procedures>
+
+    <procedure name="f_CheckTask">
+      <mappings>
+        <hibernate-mapping xmlns="urn:nhibernate-mapping-2.2">
+          <sql-query name="Execf_CheckTask">
+            <query-param name="ApplicationExecutorGroup" type="System.Int64"/>
+            <query-param name="Executor" type="System.Int64"/>
+            <query-param name="ShowToRemoteOffice" type="System.Boolean"/>
+            <query-param name="current_user" type="System.Int64"/>
+            exec f_CheckTask
+            @ApplicationExecutorGroup=:ApplicationExecutorGroup,
+            @Executor=:Executor,
+            @ShowToRemoteOffice=:ShowToRemoteOffice,
+            @current_user=:current_user
+          </sql-query>
+        </hibernate-mapping>
+      </mappings>
+      <text>
+          <![CDATA[
+          CREATE FUNCTION dbo.f_CheckTask
+(
+        @ApplicationExecutorGroup bigint,   --dbo.TaskBase
+        @Executor bigint,                   --dbo.TaskBase
+        @ShowToRemoteOffice bit,            --dbo.TaskBase
+        @current_user bigint,               --dbo.TaskBase
+        @task_subject nvarchar(MAX)
+)
+RETURNS bit
+AS
+BEGIN
+    DECLARE 
+        @isExecutorChief bit = 0,
+        @isChiefAnyInAppExecGr bit = 0,
+        @var bit
+
+    IF @ApplicationExecutorGroup IS NULL OR @Executor = @current_user
+    BEGIN
+        RETURN 0; -- false;
+    END
+
+    -- пользователь входит в группу пользователей от имени которой запущена задача
+    IF EXISTS(
+            SELECT TOP(1) 1
+            FROM
+                dbo.UserSecuritySetCache ug
+            WHERE
+                ug.UserId = @current_user
+                AND ug.GroupId = @ApplicationExecutorGroup
+    )
+    BEGIN
+        RETURN 1 -- true
+    END
+
+    IF  @Executor IS NOT NULL
+        AND EXISTS(
+            SELECT TOP(1) 1 -- так мы понимаем что текущий пользователь подчинен тому кто задачу запустил
+            FROM [dbo].[UserSecuritySetCache] 
+            WHERE
+                UserId = @current_user
+                AND SubordinateUserId = @Executor
+                AND GroupId IS NULL
+        )
+    BEGIN
+        SET @isExecutorChief = 1
+    END
+
+    IF @isExecutorChief = 0
+    BEGIN 
+        IF EXISTS(
+            SELECT
+                TOP(1) 1
+            FROM
+                [dbo].[UserSecuritySetCache] AS sub_u -- множество пользователей которые подчинены текущему
+                INNER JOIN [dbo].[UserSecuritySetCache] as g --множество пользователей, которые входят в группу от имени которой запущена задача
+                    ON sub_u.SubordinateUserId = g.UserId
+            WHERE 
+                -- множество пользователей которые подчинены текущему
+                sub_u.Subordinate != 0
+                AND sub_u.UserId = @current_user
+                --множество пользователей, которые входят в группу от имени которой запущена задача
+                AND g.GroupId = @ApplicationExecutorGroup
+        )
+        BEGIN
+            SET @isChiefAnyInAppExecGr = 1
+        END
+    END
+
+    IF (@isExecutorChief=1 OR @isChiefAnyInAppExecGr=1)
+    BEGIN
+            SET @var = 0;
+
+            WITH u_g AS (
+                SELECT
+                    m.ParentId
+                FROM
+                    [dbo].[UserGroup] as g 
+                    INNER JOIN [dbo].[UserGroup_Groups_Map] as m
+                    ON g.Id = m.ChildId
+                WHERE m.ChildId = @ApplicationExecutorGroup -- группа от которой поднимаемся вверх
+
+                UNION ALL
+                SELECT
+                    m.ParentId
+                FROM
+                    u_g as g 
+                    INNER JOIN [dbo].[UserGroup_Groups_Map] as m
+                    ON g.ParentId = m.ChildId
+            ),
+            uu_gg AS (
+                -- тут у нас будут все группы в, которые входит группа от имени которой запущена задача
+                SELECT
+                    --gg.Uid
+                    gg.Id
+                FROM
+                    u_g as g
+                    INNER JOIN [dbo].[UserGroup] as gg on g.ParentId=gg.Id
+
+                UNION
+                SELECT
+                    --g.Uid
+                    g.Id
+                FROM
+                    [dbo].[UserGroup] as g
+                WHERE 
+                    g.Id = @ApplicationExecutorGroup -- группа от которой поднимаемся вверх
+            )
+            SELECT TOP(1)
+                @var = 1 
+            FROM
+                uu_gg AS g -- тут у нас будут все группы вкоторые входит группа от имени которой запащена задача
+                INNER JOIN dbo.UserGroup as g2 -- соединим её группами нашего пользователя
+                ON g.Id = g2.Id
+                INNER JOIN dbo.UserSecuritySetCache ug
+                ON ug.GroupId = g.Id
+            WHERE
+                ug.UserId = @current_user -- пользователь входит в одну из группу по UID
+                AND g2.Uid IN(   '2CF2FA42-802B-479E-8F74-9829A8A160DA',
+                                '20439DE9-A52A-41BC-B493-56B9E02C761C',
+                                '8DE392F7-67B3-48E8-A2EC-B705FC6649E5')
+
+        IF @var=1
+        BEGIN 
+            RETURN 1 -- true
+        END
+    END
+
+
+    SET @var = 0;
+
+    /* п.4, п.5*/
+    WITH u_g AS (
+        SELECT
+            m.ParentId
+        FROM
+            [dbo].[UserGroup] as g 
+            INNER JOIN [dbo].[UserGroup_Groups_Map] as m
+            ON g.Id = m.ChildId
+        WHERE m.ChildId = @ApplicationExecutorGroup -- группа от которой поднимаемся вверх
+
+        UNION ALL
+        SELECT
+            m.ParentId
+        FROM
+            u_g as g 
+            INNER JOIN [dbo].[UserGroup_Groups_Map] as m
+            ON g.ParentId = m.ChildId
+    ),
+    uu_gg AS (
+        -- тут у нас будут все группы вкоторые входит группа от имени которой запущена задача
+        SELECT
+            gg.Uid
+        FROM
+            u_g as g
+            INNER JOIN [dbo].[UserGroup] as gg on g.ParentId=gg.Id
+
+        UNION
+        SELECT
+            g.Uid
+        FROM
+            [dbo].[UserGroup] as g
+        WHERE 
+            g.Id = @ApplicationExecutorGroup -- группа от которой поднимаемся вверх
+    )
+    SELECT TOP(1) @var = 1
+    FROM [uu_gg] as g 
+    WHERE g.Uid = '2CF2FA42-802B-479E-8F74-9829A8A160DA'  -- CrManagerGroupUid = new Guid("{2CF2FA42-802B-479E-8F74-9829A8A160DA}")
+
+
+    IF 
+    (   EXISTS( -- группа от имени которой запащена задача равна такой
+            SELECT TOP(1) 1
+            FROM [dbo].[UserGroup] as g 
+            WHERE g.Id = @ApplicationExecutorGroup
+                AND g.Uid = '2CF2FA42-802B-479E-8F74-9829A8A160DA'  -- CrManagerGroupUid = new Guid("{2CF2FA42-802B-479E-8F74-9829A8A160DA}")
+        )
+        OR @var = 1
+    )
+    AND
+    (   (   @ShowToRemoteOffice != 0  
+            AND EXISTS(
+                SELECT TOP(1) 1
+                FROM
+                    dbo.UserSecuritySetCache ug
+                    INNER JOIN dbo.UserGroup AS g
+                    ON g.Id = ug.GroupId
+                WHERE
+                    ug.UserId = @current_user
+                    AND g.Uid = 'B67C26FE-7B8B-4C61-A159-22A11C3E1731'  -- RemoteOfficeGroupUid = new Guid("{B67C26FE-7B8B-4C61-A159-22A11C3E1731}")
+            )
+        )
+        OR 
+        (
+            (
+                @ShowToRemoteOffice = 0 OR 
+                @task_subject = 'Выбор даты и времени сделки и способа оформления'
+            )
+            AND EXISTS(
+                SELECT TOP(1) 1
+                FROM
+                    dbo.UserSecuritySetCache ug
+                    INNER JOIN dbo.UserGroup AS g
+                    ON g.Id = ug.GroupId
+                WHERE
+                    ug.UserId = @current_user
+                    AND g.Uid = '49DE2E3D-99A8-4E68-998D-FC716C993D25'  -- CallCenterGroupUid = new Guid("{49DE2E3D-99A8-4E68-998D-FC716C993D25}")
+            )
+        )   
+    )
+    BEGIN
+        RETURN 1 -- true
+    END
+
+    RETURN 0 --  false;
+
+END
+          ]]>
+        </text>
+    </procedure> 
+
+    <procedure name="Locko_GetUNTask">
+      <mappings>
+        <hibernate-mapping xmlns="urn:nhibernate-mapping-2.2">
+          <sql-query name="ExecLocko_GetUNTask">
+            exec Locko_GetUNTask @userId=:userId, @top=:top
+          </sql-query>
+        </hibernate-mapping>
+      </mappings>
+      <text>
+        <![CDATA[
+CREATE PROCEDURE [Locko_GetUNTask]
+    @userId bigint, -- идентификатор пользователя, для которого получаем задачу
+    @top bigint -- число возвращаемых записей
+AS
+SET NOCOUNT ON
+SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED
+BEGIN
+    DECLARE 
+        @TransactionRole_Code_PrincipalBorrower bigint = 2, 
+        @TransactionRole_Code_GuarantorContractorLegal bigint = 2,
+        @dont_show_ac                           bit = 0,        --Не отображать заявки по АК
+        @dont_show_cc_with_collateral           bit = 0,        --Не отображать залоговые заявки по ПК
+        @dont_show_cc_without_collateral        bit = 0,        --Не отображать беззалоговые заявки по ПК
+        @show_ac_msk_spb_only                   bit = 0,        --Отображать только заявки МСК и СПб
+        @show_ac_region_only                    bit = 0         --Отображать только заявки регионов
+
+
+    --#region Наличие ролей "Не отображать заявки"
+    SELECT
+        @dont_show_ac                       = ISNULL(MAX(CASE WHEN ug.[Uid] = '2E275FF3-C7F4-4AA3-97ED-33C69ED5C91A' THEN 1 END), 0), --Не отображать заявки по АК
+        @dont_show_cc_with_collateral       = ISNULL(MAX(CASE WHEN ug.[Uid] = '46B677F9-8451-4F6B-9F96-0AE1DAFA67D9' THEN 1 END), 0), --Не отображать залоговые заявки по ПК
+        @dont_show_cc_without_collateral    = ISNULL(MAX(CASE WHEN ug.[Uid] = '3D01C365-280A-416D-AE13-B076F5BB2097' THEN 1 END), 0), --Не отображать беззалоговые заявки по ПК
+        @show_ac_msk_spb_only               = ISNULL(MAX(CASE WHEN ug.[Uid] = '46A68EAF-CFDE-4311-93B2-40A68AFC0358' THEN 1 END), 0), --Отображать только заявки МСК и СПб
+        @show_ac_region_only                = ISNULL(MAX(CASE WHEN ug.[Uid] = '960A9A3F-581D-47A8-951F-360EE94A57A7' THEN 1 END), 0)  --Отображать только заявки регионов
+    FROM
+        dbo.UserSecuritySetCache AS us
+            INNER JOIN dbo.UserGroup AS ug
+            ON ug.Id = us.GroupId
+    WHERE
+        us.UserId = @userId
+    --#endregion Наличие ролей "Не отображать заявки"
+
+    --#region Список регионов МСК СПБ
+    -- Имеет смысл проверять только в случае, если нет запрета на показ АК и установлен только один из признаков региональности
+    IF OBJECT_ID('tempdb..#msk_spb') IS NOT NULL
+    BEGIN
+        DROP TABLE #msk_spb
+    END
+
+    CREATE TABLE #msk_spb (Id int NOT NULL PRIMARY KEY)
+
+    IF @dont_show_ac = 0
+        AND 
+        (
+            (
+                @show_ac_msk_spb_only = 0 AND 
+                @show_ac_region_only  = 1
+            ) 
+            OR
+            (
+                @show_ac_msk_spb_only = 1 AND 
+                @show_ac_region_only  = 0
+            )
+        )
+    BEGIN
+        
+        ;WITH cte_branch AS
+        (
+            SELECT 
+                lb.Id,
+                lb.Parent,
+                lb.[Uid]
+            FROM dbo.Locko_Branch lb
+            WHERE lb.[Uid] IN ('87A9F1CA-EC04-42C5-85BE-7C854FEADE6F', '25E3A975-493F-405B-879A-08F501DF1340') -- МСК СПБ
+            UNION ALL 
+            SELECT 
+                lb.Id,
+                lb.Parent,
+                lb.[Uid]
+            FROM dbo.Locko_Branch lb
+                INNER JOIN cte_branch cb
+                ON cb.Id = lb.Parent
+        )
+        INSERT INTO #msk_spb(Id)
+        SELECT Id
+        FROM cte_branch
+    
+    END
+    ELSE -- Смысла проверять нет
+    BEGIN 
+            
+        SELECT 
+           @show_ac_msk_spb_only = 1, 
+           @show_ac_region_only  = 1
+         
+    END  
+    --#endregion 
+
+    
+    
+    ;WITH L_Application AS(
+            -- запрос к заявке (фильтр по вхождению пользователя в группу, указанную в Application.Qualification.UserGroup)
+            SELECT
+                app.[Id],
+                app.ApplicationRank,
+                app.[LoanAmountPreDecision],
+                app.[Region],
+                app.[OddLot],
+                app.[DateOfCompletion],
+                app.[SelectedDecisionOnApp],
+                app.[SelectedProductsOption],
+                Task = tb.[Id],
+                QualificationUserId = ussc.[UserId] 
+            FROM 
+                Locko_Application AS app
+                LEFT JOIN TaskBase AS tb 
+                    INNER JOIN [User] AS u 
+                        ON u.Id = tb.[Executor] 
+                        AND u.Uid = 'F0E949BF-4DA4-4C02-B04C-CA61964B4FE8'
+                    INNER JOIN UserSecuritySetCache AS ussc 
+                        ON ussc.[GroupId] = tb.[ApplicationExecutorGroup]
+                ON tb.[Application] = app.[Id]
+                LEFT JOIN dbo.Locko_Product                         AS lp
+                    ON lp.id = app.CreditType
+                LEFT JOIN dbo.Locko_ProductOption                   AS po
+                    ON po.id = app.SelectedProductsOption
+                LEFT JOIN dbo.Locko_Program                         AS lpr
+                ON lpr.Id = po.Program
+                OUTER APPLY 
+                    (
+                        SELECT 
+                            yes = 
+                                CASE WHEN EXISTS (SELECT * FROM #msk_spb ms WHERE ms.Id = app.Branch)
+                                    THEN 1 
+                                    ELSE 0
+                                END 
+                    ) msk_spb
+            WHERE
+                ussc.[UserId] = @userId
+                and tb.[Status] in (
+                    '34387afa-6b70-476f-9d34-748732059003',
+                    '37a184b8-a81d-4177-9eb5-4ebe3dfae959',
+                    '85707efe-806c-4ec6-8cd6-4d5e4edd8b19',
+                    '112ea757-36f7-4859-b0d3-6cc0f5a04705',
+                    'b9c9f74a-15ec-4337-9916-f02ffec83dd4',
+                    'b0b6a339-ba74-4e46-b721-2733d7fb76a9',
+                    '70918293-8b84-43be-ad39-181375d51373',
+                    '98ff43bd-b897-41f0-adf2-4eb3b3783851'
+                )
+                -- Обработка групп "Не отображать"
+                AND NOT (
+                    @dont_show_ac = 1 AND                   -- группа: не показывать автокредит
+                    ISNULL(lp.Code, -1) = 3 AND             -- и это автокредит
+                    ISNULL(tb.Executor, -1) != @userId      -- и пользователь не исполнитель этой задачи
+                )        
+                AND NOT (
+                    @dont_show_cc_with_collateral = 1 AND   -- группа: не показывать потреб.кредит с залогом
+                    ISNULL(lp.Code, -1) = 1 AND             -- и это потреб.кредит
+                    ISNULL(lpr.IsCollateral, 0) = 1 AND     -- и залог есть                                                     
+                    ISNULL(tb.Executor, -1) != @userId      -- и пользователь не исполнитель этой задачи
+                )        
+                AND NOT (
+                    @dont_show_cc_without_collateral = 1 AND-- группа: не показывать потреб.кредит без залога
+                    ISNULL(lp.Code, -1) = 1 AND             -- и это потреб.кредит
+                    ISNULL(lpr.IsCollateral, 0) = 0  AND    -- и залога нет либо не известно
+                    ISNULL(tb.Executor, -1) != @userId      -- и пользователь не исполнитель этой задачи
+                )
+                AND -- Группы показывать или нет автокредиты мск спб регион
+                ( 
+                    ISNULL(tb.Executor, -1) = @userId       -- и пользователь не исполнитель этой задачи
+                    OR
+                    (
+                        @show_ac_msk_spb_only = 1 AND
+                        msk_spb.yes = 1
+                    )  
+                    OR
+                    ( 
+                        @show_ac_region_only  = 1 AND 
+                        msk_spb.yes = 0
+                    )
+                )
+    ),
+    UNTasks AS (
+        select
+            a.[Id],
+            a.[Task],
+            ISNULL(a.ApplicationRank ,0) + 
+            (
+                select top 1
+                    oso.[Rank]
+                from 
+                    Locko_OrderSortingOptions oso
+                    left join M_LA_TransactionParticipants m_tp on m_tp.[Parent] = a.[Id]
+                    left join Locko_TransactionParticipant tp on m_tp.[Child] = tp.[Id]
+                    left join TransactionRole tr on tp.[TransactionRole] = tr.[Id]
+                    left join Locko_Property p on p.[TransactionParticipant] = tp.[Id]
+                where
+
+                    -- Product
+                    (
+                        oso.[Product] is null
+                        or
+                        isnull(doa.[CreditType], po.[Product]) = oso.[Product]
+                    )
+
+                    -- Tariff
+                    and
+                    (
+                        oso.[Tariff] is null
+                        or
+                        isnull(doa.[Program], po.[Program]) = oso.[Tariff]
+                    )
+
+                    -- ClientCategory
+                    and
+                    (
+                        oso.[ClientCategory] is null
+                        or
+                        (
+                            tr.[Code] = @TransactionRole_Code_PrincipalBorrower
+                            and
+                            tp.[Category] = oso.[ClientCategory]
+                        )
+                    )
+
+                    -- MinLimit
+                    and
+                    (
+                        oso.[MinLimit] is null
+                        or
+                        isnull(doa.[LoanAmount], a.[LoanAmountPreDecision]) >= oso.[MinLimit]
+                    )
+
+                    -- MaxLimit
+                    and
+                    (
+                        oso.[MaxLimit] is null
+                        or
+                        isnull(doa.[LoanAmount], a.[LoanAmountPreDecision]) <= oso.[MaxLimit]
+                    )
+
+                    -- CollateralFlag
+                    and
+                    (
+                        oso.[CollateralFlag] is null
+                        or
+                        (
+                            case
+                                when
+                                    p.[TransactionParticipant] = tp.[Id]
+                                    and p.[PledgeAsCollateralAdmissible] = 1
+                                then 1
+                                else 0
+                            end
+                        ) = oso.[CollateralFlag]
+                    )
+
+                    -- GuarantorFlag
+                    and
+                    (
+                        oso.[GuarantorFlag] is null
+                        or
+                        (
+                            case
+                                when
+                                    tp.[TransactionRole] = tr.[Id]
+                                    and
+                                    (
+                                        tr.[Code] = @TransactionRole_Code_PrincipalBorrower
+                                        or
+                                        tr.[Code] = @TransactionRole_Code_GuarantorContractorLegal
+                                    )
+                                then 1
+                                else 0
+                            end
+                        ) = oso.[GuarantorFlag]
+                    )
+
+                    -- Region
+                    and
+                    (
+                        oso.[Region] is null
+                        or
+                        a.[Region] = oso.[Region]
+                    )
+
+                    -- OddLot
+                    and
+                    (
+                        oso.[OddLot] is null
+                        or
+                        a.[OddLot] = oso.[OddLot]
+                    )
+
+                    -- MaxFPSScore
+                    and 
+                    (
+                        oso.[MaxFPSScore] is null
+                        or
+                        (
+                            tp.[TransactionRole] = @TransactionRole_Code_PrincipalBorrower
+                            and
+                            tp.[FPSScore] <= oso.[MaxFPSScore]
+                        )
+                    )
+
+                    -- MaxScoring
+                    and 
+                    (
+                        oso.[MaxScoring] is null
+                        or
+                        (
+                            tp.[TransactionRole] = @TransactionRole_Code_PrincipalBorrower
+                            and
+                            tp.[Scoring] <= oso.[MaxScoring]
+                        )
+                    )
+
+                    -- MinutesFromCreation
+                    and
+                    (
+                        oso.[MinutesFromCreation] is null
+                        or
+                        datediff(mi, a.[DateOfCompletion], getdate()) >= oso.[MinutesFromCreation]
+                    )
+
+                    -- MaxMinutesFromCreation
+                    and
+                    (
+                        oso.[MaxMinutesFromCreation] is null
+                        or
+                        datediff(mi, a.[DateOfCompletion], getdate()) <= oso.[MaxMinutesFromCreation]
+                    )
+
+                    -- QualificationIsSuitable
+                    and
+                    (
+                        oso.[QualificationIsSuitable] is null
+                        or
+                        (
+                            oso.[QualificationIsSuitable] = 1
+                            and
+                            a.[QualificationUserId] = @userId
+                        )
+                        or
+                        (
+                            oso.[QualificationIsSuitable] = 0
+                            and
+                            a.[QualificationUserId] <> @userId
+                        )
+                    )
+
+                order by oso.[Rank] desc
+            ) [Rank]
+        from 
+            L_Application a
+            left join Locko_DecisionOnApplication doa on doa.[Id] = a.[SelectedDecisionOnApp]
+            left join Locko_ProductOption po on po.[Id] = a.[SelectedProductsOption]
+    )
+
+    select top (@top)
+        a.[Id],
+        a.[Task],
+        a.[Rank],
+        [Count] = COUNT(1) OVER (PARTITION BY 1)
+    from UNTasks AS a
+    order by a.[Rank] desc, a.[Id]
+
+END
+        ]]>
+      </text>
+    </procedure>
+
+    <procedure name="Locko_GetCATask">
+      <mappings>
+        <hibernate-mapping xmlns="urn:nhibernate-mapping-2.2">
+          <sql-query name="ExecLocko_GetCATask">
+            exec Locko_GetCATask @userId=:userId, @top=:top, @dateNowString=:dateNowString
+          </sql-query>
+        </hibernate-mapping>
+      </mappings>
+      <text>
+        <![CDATA[
+
+/**************************************************************************************
+
+   Получение свободной задачи по Заявке для Кредитного ассистента
+
+**************************************************************************************/
+CREATE PROCEDURE Locko_GetCATask
+
+    -- идентификатор пользователя, для которого получаем задачу
+    @userId bigint,
+
+    -- число возвращаемых записей
+    @top bigint,
+
+    -- текущая дата
+    @dateNowString nvarchar(max)
+
+AS
+BEGIN
+
+    declare @systemUser bigint, @dateNow datetime = @dateNowString
+
+    select @systemUser = [Id] from [User] with (nolock) where [Uid] = 'F0E949BF-4DA4-4C02-B04C-CA61964B4FE8'
+
+    declare @tempCATaskFirst table(
+        [Id] [bigint] NOT NULL,
+        [TaskCreationDate] [datetime] NULL,
+        [Task] [bigint] NOT NULL,
+        [Rank] [bigint] NULL
+    )
+
+    declare @tempCATaskSecond table(
+        [Id] [bigint] NOT NULL
+    )
+
+    insert into @tempCATaskFirst ([Id], [TaskCreationDate], [Task], [Rank])
+    select
+        a.[Id],
+        a.[TaskCreationDate],
+        a.[Task],
+        (
+            select top 1
+                css.[Rank]
+            from Locko_CalendarSortingSetting css with (nolock)
+            left join Locko_Application app with (nolock) on app.[Id] = a.[Id]
+            left join Locko_CalendarMeeting cal with (nolock) on cal.[Application] = app.[Id]
+            where
+
+                -- В пределах 15 минут
+                (
+                    css.[InFifteenMinutes] is null
+                    or
+                    (
+                      Datediff(mi,@dateNow, cal.[DateTime]) >= -15
+                      and
+                      Datediff(mi,@dateNow, cal.[DateTime]) <= 15
+                    )
+                )
+
+                -- В пределах текущего дня
+                and
+                (
+                    css.[InThisDay] is null
+                    or
+                    Datediff(dd,@dateNow, cal.[DateTime]) <= 1
+                )
+
+                -- Не относится к текущему дню
+                and
+                (
+                    css.[NotInThisDay] is null
+                    or
+                    (
+                        Datediff(dd,@dateNow, cal.[DateTime]) > 1
+                        or
+                        (
+                            cal.[DateTime] is null
+                            and app.[TaskId] <> 43
+                        )
+                    )
+                )
+
+                -- Задача "Постконтроль"
+                and
+                (
+                    css.[IsPostControl] is null
+                    or
+                    app.[TaskId] = 43
+                )
+
+            order by css.[Rank] desc
+        ) Rank
+    from (
+        -- запрос к заявке (фильтр по вхождению пользователя в группу, указанную в Application.Qualification.UserGroup)
+        select app.*, tb.[Id] Task, tb.[CreationDate] TaskCreationDate, ussc.[UserId] QualificationUserId from Locko_Application app with (nolock)
+        left join TaskBase tb with (nolock) on tb.[Application] = app.[Id]
+        inner join UserSecuritySetCache ussc with (nolock) on ussc.[GroupId] = tb.[ApplicationExecutorGroup]
+        where
+            tb.[Executor] = @systemUser
+            and ussc.[UserId] = @userId
+            and tb.[Status] in (
+                '34387afa-6b70-476f-9d34-748732059003',
+                '37a184b8-a81d-4177-9eb5-4ebe3dfae959',
+                '85707efe-806c-4ec6-8cd6-4d5e4edd8b19',
+                '112ea757-36f7-4859-b0d3-6cc0f5a04705',
+                'b9c9f74a-15ec-4337-9916-f02ffec83dd4',
+                'b0b6a339-ba74-4e46-b721-2733d7fb76a9',
+                '70918293-8b84-43be-ad39-181375d51373',
+                '98ff43bd-b897-41f0-adf2-4eb3b3783851'
+            )
+    ) a
+
+    insert into @tempCATaskSecond
+    select [Id]
+    from @tempCATaskFirst
+
+    select top (@top)
+        a.[Id],
+        a.[Task],
+        a.[Rank],
+        COUNT(b.[Id]) Count
+    from @tempCATaskFirst a
+    left join @tempCATaskSecond b on b.[Id] > 0
+    group by
+        a.[Id],
+        a.[TaskCreationDate],
+        a.[Task],
+        a.[Rank]
+    order by a.[Rank] desc, a.[TaskCreationDate]
+
+END
+
+        ]]>
+      </text>
+    </procedure>
+
+    <procedure name="Locko_GetPortletContent">
+      <mappings>
+        <hibernate-mapping xmlns="urn:nhibernate-mapping-2.2">
+          <sql-query name="ExecLocko_GetPortletContent">
+            <query-param name="status_list" type="System.String"/>
+            <query-param name="app_executor_groups" type="XmlDoc"/>
+            <query-param name="incoming_channel" type="XmlDoc"/>
+            <query-param name="region" type="XmlDoc"/>
+            <query-param name="branch" type="XmlDoc"/>
+            <query-param name="executor" type="XmlDoc"/>
+            <query-param name="exclude_system_tasks" type="Boolean"/>
+            <query-param name="elementUid" type="Guid"/>
+            <query-param name="application_status" type="XmlDoc"/>
+            <query-param name="application_number" type="System.String"/>
+            <query-param name="current_user" type="System.Int64"/>
+            <query-param name="full_name" type="System.String"/>
+            <query-param name="birth_date" type="System.DateTime"/>
+            <query-param name="passport_series" type="System.String"/>
+            <query-param name="passport_number" type="System.String"/>
+            <query-param name="phone" type="System.String"/>
+            <query-param name="creation_date_begin" type="System.DateTime"/>
+            <query-param name="creation_date_end" type="System.DateTime"/>
+            <query-param name="approval_date_begin" type="System.DateTime"/>
+            <query-param name="approval_date_end" type="System.DateTime"/>
+            <query-param name="date_of_completion_begin" type="System.DateTime"/>
+            <query-param name="date_of_completion_end" type="System.DateTime"/>
+            <query-param name="creation_author" type="System.Int64"/>
+            <query-param name="manager_issued" type="System.Int64"/>
+            <query-param name="manager_fullfilled" type="System.Int64"/>
+            <query-param name="manager_declined" type="System.Int64"/>
+            <query-param name="amount_requested_begin" type="System.Double"/>
+            <query-param name="amount_requested_end" type="System.Double"/>
+            <query-param name="loan_amount_preDecision_begin" type="System.Double"/>
+            <query-param name="loan_amount_preDecision_end" type="System.Double"/>
+            <query-param name="loan_amount_begin" type="System.Double"/>
+            <query-param name="loan_amount_end" type="System.Double"/>
+            <query-param name="role" type="System.Bool"/>
+            <query-param name="additional_filtering" type="System.Int16"/>
+            <query-param name="with_task" type="System.Boolean"/>
+            <query-param name="count" type="System.Int32"/>
+            <query-param name="from_index" type="System.Int32"/>
+            <query-param name="simple_search" type="String"/>
+            <query-param name="without_executor" type="Bool"/>
+            <query-param name="utm_labels" type="XmlDoc"/>
+            <query-param name="credit_type" type="System.Int64"/>
+            <query-param name="contractor_legal" type="XmlDoc"/>
+            <query-param name="point_of_sale" type="XmlDoc"/>
+
+            exec Locko_GetPortletContent
+            @status_list=:status_list,
+            @app_executor_groups=:app_executor_groups,
+            @incoming_channel=:incoming_channel,
+            @region=:region,
+            @branch=:branch,
+            @executor=:executor,
+            @application_status=:application_status,
+            @application_number=:application_number,
+            @current_user=:current_user,
+            @full_name=:full_name,
+            @birth_date=:birth_date,
+            @passport_series=:passport_series,
+            @passport_number=:passport_number,
+            @phone=:phone,
+            @creation_date_begin=:creation_date_begin,
+            @creation_date_end=:creation_date_end,
+            @approval_date_begin=:approval_date_begin,
+            @approval_date_end=:approval_date_end,
+            @date_of_completion_begin=:date_of_completion_begin,
+            @date_of_completion_end=:date_of_completion_end,
+            @creation_author=:creation_author,
+            @manager_issued=:manager_issued,
+            @manager_fullfilled=:manager_fullfilled,
+            @manager_declined=:manager_declined,
+            @amount_requested_begin=:amount_requested_begin,
+            @amount_requested_end=:amount_requested_end,
+            @loan_amount_preDecision_begin=:loan_amount_preDecision_begin,
+            @loan_amount_preDecision_end=:loan_amount_preDecision_end,
+            @loan_amount_begin=:loan_amount_begin,
+            @loan_amount_end=:loan_amount_end,
+            @role=:role,
+            @additional_filtering=:additional_filtering,
+            @with_task=:with_task,
+            @exclude_system_tasks=:exclude_system_tasks,
+            @elementUid=:elementUid
+            @count=:count,
+            @from_index=:from_index,
+            @simple_search=:simple_search,
+            @without_executor=:without_executor,
+            @utm_labels=:utm_labels,
+            @credit_type=:credit_type,
+            @contractor_legal=:contractor_legal,
+            @point_of_sale=:point_of_sale
+          </sql-query>
+        </hibernate-mapping>
+      </mappings>
+      <text>
+        <![CDATA[
+CREATE PROCEDURE dbo.Locko_GetPortletContent
+    @status_list                    xml                 = NULL, -- список статусов XML вида <items><item id="1" /><item id="1" /><item id="3" /><item id="4" /></items>
+    @app_executor_groups            xml                 = NULL, -- список Групп Исполнителей Заявок XML вида <items><item id="1" /><item id="1" /><item id="3" /><item id="4" /></items>
+    @incoming_channel               xml                 = NULL, -- Канал поступления, список - XML вида <items><item id="1" /><item id="1" /><item id="3" /><item id="4" /></items>
+    @region                         xml                 = NULL, -- Регион оформления кредита, список - XML вида <items><item id="1" /><item id="1" /><item id="3" /><item id="4" /></items>
+    @branch                         xml                 = NULL, -- Отделение, список - XML вида <items><item id="1" /><item id="1" /><item id="3" /><item id="4" /></items>
+    @executor                       xml                 = NULL, -- Исполнители, список - XML вида <items><item id="1" /><item id="1" /><item id="3" /><item id="4" /></items>
+    @application_status             xml                 = NULL, -- Статус заявки, список - XML вида <items><item id="1" /><item id="1" /><item id="3" /><item id="4" /></items>
+    @utm_labels                     xml                 = NULL, -- Cписок меток XML вида <items><item id="smarterpro" /><item id="yandex" /></items>
+    @application_number             nvarchar(100)       = NULL, -- номер заявки
+    @current_user                   bigint              = NULL, -- Текущий пользователь
+    @full_name                      nvarchar(300)       = NULL, -- основной заёмщик ФИО
+    @birth_date                     datetime            = NULL, -- основной заёмщик дата рождения
+    @passport_series                nvarchar(50)        = NULL, -- основной заёмщик серия паспорта
+    @passport_number                nvarchar(50)        = NULL, -- основной заёмщик номер паспорта
+    @phone                          nvarchar(50)        = NULL, -- номер телефона основного заёмщика
+    @creation_date_begin            datetime            = NULL, -- Дата создания ОТ
+    @creation_date_end              datetime            = NULL, -- Дата создания ДО
+    @approval_date_begin            datetime            = NULL, -- Дата одобрения ОТ
+    @approval_date_end              datetime            = NULL, -- Дата одобрения ДО
+    @date_of_completion_begin       datetime            = NULL, -- Дата заполнения ОТ
+    @date_of_completion_end         datetime            = NULL, -- Дата заполнения ДО
+    @creation_author                bigint              = NULL, -- Автор создания
+    @manager_issued                 bigint              = NULL, -- Сотрудник, который выдал кредит
+    @manager_fullfilled             bigint              = NULL, -- Сотрудник, который завершил заполнение заявки
+    @manager_declined               bigint              = NULL, -- Сотрудник, который выбрал отказ или брак
+    @amount_requested_begin         money               = NULL, -- Запрошенная сумма ОТ
+    @amount_requested_end           money               = NULL, -- Запрошенная сумма ДО
+    @loan_amount_preDecision_begin  money               = NULL, -- Сумма по предварительному решению ОТ
+    @loan_amount_preDecision_end    money               = NULL, -- Сумма по предварительному решению ДО
+    @loan_amount_begin              money               = NULL, -- Сумма из выбранного решения ОТ
+    @loan_amount_end                money               = NULL, -- Сумма из выбранного решения ДО
+    @role                           bit                 = 0,    -- 1 - КА; 0 или NULL  - остальные роли
+    @additional_filtering           smallint            = NULL, -- одно из допустимых значений
+                                                                -- По региону - 1
+                                                                -- По отделению - 2
+                                                                -- Дистанционный офис - 3
+                                                                -- Колл-центр - 4
+                                                                -- если будет передано неизвестное значение фильтрацтя производиться не будет
+    @with_task                      bit                 = 0,    -- если равно 1, выводить заявки только если есть задачи по ним
+    @exclude_system_tasks           bit                 = 0,    -- если равно 1, исключать системные задачи
+    @without_executor               bit                 = NULL, -- отбор задания ( 1 - БЕЗ исполнителя; 0 - С исполнителем; NULL - любых)
+    @elementUid                     uniqueidentifier    = NULL, -- uid элемента диаграммы
+    @simple_search                  nvarchar(200)       = NULL, -- строка для простого поиска
+    @credit_type                    bigint              = NULL, -- Тип кредита
+    @point_of_sale                  xml                 = NULL, -- список Точек продаж. XML вида <items><item id="1" /><item id="1" /><item id="3" /><item id="4" /></items>
+    @contractor_legal               xml                 = NULL, -- список Контрагентов (Автосалоны) продаж. XML вида <items><item id="1" /><item id="1" /><item id="3" /><item id="4" /></items>
+    -- для постраничного вывода
+    @count                          int                 = 100,          -- сколько записей(заявок) нужно вывести 2147483647
+    @from_index                     int                 = 0,            -- сколько записей нужно пропустить, а потом выводить данные
+    @total_count                    int                 = 0     OUTPUT, -- сколько всего записей в наборе данных
+    @total_pages                    int                 = 0     OUTPUT  -- сколько всего страниц в наборе данных
+AS
+SET NOCOUNT ON
+SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED
+BEGIN
+
+
+    --WHILE @@TRANCOUNT > 0 COMMIT TRAN
+
+    --INSERT INTO dbo.debug(debug_data)
+    --SELECT 
+    --    x = 
+    --    (
+    --        SELECT
+    --            @status_list AS status_list,                    
+    --            @app_executor_groups AS app_executor_groups,             
+    --            @incoming_channel AS incoming_channel,
+    --            @region AS region,                         
+    --            @branch AS branch,                         
+    --            @executor AS executor,                       
+    --            @application_status AS application_status,            
+    --            @utm_labels AS utm_labels,                     
+    --            @application_number AS application_number,             
+    --            @current_user as [current_user],                   
+    --            @full_name as full_name,                      
+    --            @birth_date as birth_date,                     
+    --            @passport_series as passport_series,                
+    --            @passport_number as passport_number,                
+    --            @phone as phone,                          
+    --            @creation_date_begin as creation_date_begin,            
+    --            @creation_date_end as creation_date_end,              
+    --            @approval_date_begin as approval_date_begin,            
+    --            @approval_date_end as approval_date_end,              
+    --            @date_of_completion_begin as date_of_completion_begin,       
+    --            @date_of_completion_end as date_of_completion_end,         
+    --            @creation_author as creation_author,                
+    --            @manager_issued as manager_issued,                 
+    --            @manager_fullfilled as manager_fullfilled,             
+    --            @manager_declined as manager_declined,               
+    --            @amount_requested_begin as amount_requested_begin,         
+    --            @amount_requested_end as amount_requested_end,           
+    --            @loan_amount_preDecision_begin as loan_amount_preDecision_begin,  
+    --            @loan_amount_preDecision_end as loan_amount_preDecision_end,    
+    --            @loan_amount_begin as loan_amount_begin,              
+    --            @loan_amount_end as loan_amount_end,                
+    --            @role as role,                           
+    --            @additional_filtering as additional_filtering,           
+    --            @with_task as with_task,                      
+    --            @exclude_system_tasks as exclude_system_tasks,           
+    --            @without_executor as without_executor,               
+    --            @elementUid as elementUid,                     
+    --            @simple_search as simple_search,                  
+    --            @credit_type as credit_type,                    
+    --            @point_of_sale as point_of_sale,                  
+    --            @contractor_legal AS contractor_legal,
+    --            @count AS [count],                          
+    --            @from_index AS from_index                  
+    --        FOR xml PATH('input'), type
+    --    )
+    
+--#region Временные таблицы и переменные
+    IF OBJECT_ID('tempdb..#Locko_statuses') IS NOT NULL
+    BEGIN
+        DROP TABLE #Locko_statuses
+    END
+
+    IF OBJECT_ID('tempdb..#Locko_id_list') IS NOT NULL
+    BEGIN
+        DROP TABLE #Locko_id_list
+    END
+
+    IF OBJECT_ID('tempdb..#L_Application') IS NOT NULL
+    BEGIN
+        DROP TABLE #L_Application
+    END
+
+    IF OBJECT_ID('tempdb..#TaskBase_Application') IS NOT NULL
+    BEGIN
+        DROP TABLE #TaskBase_Application
+    END
+    
+    IF OBJECT_ID('tempdb..#simple_search_Application') IS NOT NULL
+    BEGIN
+        DROP TABLE #simple_search_Application
+    END
+
+    IF OBJECT_ID('tempdb..#utm_label') IS NOT NULL
+    BEGIN
+        DROP TABLE #utm_label
+    END
+
+    IF OBJECT_ID('tempdb..#utm_labeled_Application') IS NOT NULL
+    BEGIN
+        DROP TABLE #utm_labeled_Application
+    END
+ 
+    CREATE TABLE #utm_labeled_Application(Id bigint NOT NULL PRIMARY KEY)
+
+    CREATE TABLE #utm_label(utm_label varchar(100) NOT NULL PRIMARY KEY)
+
+    CREATE TABLE #simple_search_Application(Id bigint NOT NULL PRIMARY KEY)
+
+    CREATE TABLE #TaskBase_Application([Application] bigint NOT NULL PRIMARY KEY)
+
+    CREATE TABLE #Locko_statuses(id uniqueidentifier NOT NULL /*PRIMARY KEY*/)
+
+    CREATE TABLE #Locko_id_list
+    (
+        id      bigint NOT NULL,
+        [type]  smallint NOT NULL,
+
+        PRIMARY KEY ([type], id)
+    )
+
+    CREATE TABLE #L_Application
+    (
+        --R_N                         int NOT NULL IDENTITY  PRIMARY KEY,
+        Id                          bigint PRIMARY KEY,
+        [Rank]                      bigint,
+        --Branch                      bigint,
+        --CreationAuthor              bigint,
+        --ApplicationNumber           nvarchar(100),
+        --ApplicationStatus           bigint,
+        CreationDate                datetime,
+        --OddLot                      bit,
+        --Region                      bigint,
+        --ApprovalDate                datetime,
+        --Validity                    datetime,
+        --LoanAmountPreDecision       money,
+        --AgreedDecision              bigint,
+        --SelectedDecisionOnApp       bigint,
+        --SelectedProductsOption      bigint,
+        --AdditionalProperties        bigint,
+        --IncomingChannel             bigint,
+        --AmountRequested             money,
+        TaskBase_Id                 bigint,
+        --Product                     bigint,
+        total_count                 int                 
+    )
+    
+    DECLARE
+        @transaction_role                   bit = 0,  -- учитывать поля связанные с Locko_TransactionParticipant
+        @current_user_region                bigint = NULL,  -- регион к которому относиться текущий пользователь
+        @current_user_branch                bigint = NULL,  -- отделение к которому относиться текущий пользователь
+        @current_user_underwriter           bit = 0,        -- 1 - текущий пользователь является андеррайтером
+        @dont_show_ac                       bit = 0,        --Не отображать заявки по АК
+        @dont_show_cc_with_collateral       bit = 0,        --Не отображать залоговые заявки по ПК
+        @dont_show_cc_without_collateral    bit = 0,        --Не отображать беззалоговые заявки по ПК
+        @show_ac_msk_spb_only               bit = 0,        --Отображать только заявки МСК и СПб
+        @show_ac_region_only                bit = 0         --Отображать только заявки регионов
+
+    DECLARE @Locko_TimeRank TABLE
+    (
+        RangeTimeFrom   int NOT NULL,
+        RangeTimeTill   int NOT NULL,
+        TimeRank        bigint NOT NULL
+
+        PRIMARY KEY (RangeTimeFrom, RangeTimeTill)
+    )
+    
+    DECLARE @system_users TABLE([user_id] bigint PRIMARY KEY)
+
+    INSERT INTO @Locko_TimeRank
+    (
+        RangeTimeFrom,
+        RangeTimeTill,
+        TimeRank
+    )
+    --VALUES
+    --    (0,       15,         100),
+    --    (15,  180,        200),
+    --    (180, 1440,       500),
+    --    (1440,    4320,       1000),
+    --    (4320,    999999999,  10000)
+    VALUES -- between не должен попадать в два промежутка!
+        (0,     15,         100),
+        (16,    180,        200),
+        (181,   1440,       500),
+        (1441,  4320,       1000),
+        (4321,  999999999,  10000)
+
+    INSERT INTO @system_users
+    (
+        [user_id]
+    )
+    SELECT Id
+    FROM [User]
+    WHERE [Uid] IN( 'C218A7EB-1E45-4056-BF84-C6818A1DABD6', 
+                    'F0E949BF-4DA4-4C02-B04C-CA61964B4FE8' )
+
+    IF OBJECT_ID('tempdb..#msk_spb') IS NOT NULL
+    BEGIN
+        DROP TABLE #msk_spb
+    END
+
+    CREATE TABLE #msk_spb (Id int NOT NULL PRIMARY KEY)
+--#endregion Временные таблицы и переменные
+
+--#region проверки и установка значений по умолчанию
+    SELECT
+        @count                          = IIF(ISNULL(@count, 100)<=0, 100, ISNULL(@count, 100)),
+        @from_index                     = IIF(ISNULL(@from_index, 0)<0, 0, ISNULL(@from_index, 0)),
+        @full_name                      = NULLIF(RTRIM(LTRIM(@full_name)), ''),
+        @birth_date                     = CAST(@birth_date AS date),
+        @application_number             = NULLIF(REPLACE(RTRIM(LTRIM(@application_number)), ' ', ''), ''), 
+        @passport_series                = NULLIF(REPLACE(RTRIM(LTRIM(@passport_series)), ' ', ''), ''),                 -- серия паспорта
+        @passport_number                = NULLIF(REPLACE(RTRIM(LTRIM(@passport_number)), ' ', ''), ''),                 -- номер паспорта
+        @phone                          = NULLIF(LTRIM(RTRIM(@phone)), ''),                                             -- номер телефона основного заёмщика
+        @creation_date_begin            = CAST(@creation_date_begin AS date),                                           -- Дата создания 
+        @creation_date_end              = CAST(@creation_date_end AS date),                                             -- Дата создания 
+        @approval_date_begin            = CAST(@approval_date_begin AS date),                                           -- Дата одобрения
+        @approval_date_end              = CAST(@approval_date_end AS date),                                             -- Дата одобрения
+        @date_of_completion_begin       = CAST(@date_of_completion_begin AS date),                                      -- Дата заполнения
+        @date_of_completion_end         = CAST(@date_of_completion_end AS date),                                        -- Дата заполнения
+        @creation_author                = IIF(@creation_author<=0, NULL, @creation_author),                             -- Автор создания
+        @manager_issued                 = IIF(@manager_issued<=0, NULL, @manager_issued),                               -- Сотрудник, который выдал кредит
+        @manager_fullfilled             = IIF(@manager_fullfilled<=0, NULL, @manager_fullfilled),                       -- Сотрудник, который завершил заполнение заявки
+        @manager_declined               = IIF(@manager_declined<=0, NULL, @manager_declined),                           -- Сотрудник, который выбрал отказ или брак
+        @amount_requested_begin         = IIF(@amount_requested_begin<=0, NULL, @amount_requested_begin),               -- Запрошенная сумма
+        @amount_requested_end           = IIF(@amount_requested_end<=0, NULL, @amount_requested_end),
+        @loan_amount_preDecision_begin  = IIF(@loan_amount_preDecision_begin<=0, NULL, @loan_amount_preDecision_begin), -- Сумма по предварительному решению
+        @loan_amount_preDecision_end    = IIF(@loan_amount_preDecision_end<=0, NULL, @loan_amount_preDecision_end),
+        @loan_amount_begin              = IIF(@loan_amount_begin<=0, NULL, @loan_amount_begin),                         -- Сумма из выбранного решения
+        @loan_amount_end                = IIF(@loan_amount_end<=0, NULL, @loan_amount_end),
+        @role                           = ISNULL(@role,0),
+        @additional_filtering           = IIF(ISNULL(@additional_filtering, -1) in(1,2,3,4), @additional_filtering, -1),-- одно из допустимых значений
+                                                                                                                        -- По региону - 1
+                                                                                                                        -- По отделению - 2
+                                                                                                                        -- Дистанционный офис - 3
+                                                                                                                        -- Колл-центр - 4
+        @with_task                      = ISNULL(@with_task, 0),                                                        -- если равно 1, выводить заявки только если есть задачи по ним
+        @exclude_system_tasks           = ISNULL(@exclude_system_tasks, 0),                                             -- если равно 1, исключать системные задачи
+        @simple_search                  = NULLIF(LTRIM(RTRIM(@simple_search)), ''),                                     -- строка для простого поиска
+        @credit_type                    = IIF(ISNULL(@credit_type, 0)<=0, NULL, @credit_type)                           -- Тип кредита
+
+    SELECT
+        @simple_search = IIF(LEN(@simple_search)<3, NULL, @simple_search), -- по слишком короткой строке искать не будем
+        @from_index = FLOOR( CAST(@from_index AS float) / CAST(@count AS float) ) * @count     -- подравняем индекс
+--#endregion проверки и установка значений по умолчанию
+ 
+/*перекрываем значения некоторых параметров в зависимости от значения других*/
+    If @elementUid IS NOT NULL
+    BEGIN
+        -- если указан uid элемента диаграммы
+        -- то выводить заявки только если есть задачи по ним
+        SET @with_task = 1
+    END
+
+    -- @exclude_system_tasks находится в зависимости от @without_executor
+    SET @exclude_system_tasks = 
+        CASE 
+            WHEN @without_executor IS NULL THEN     -- NULL - отбор любых задач
+                @exclude_system_tasks
+            WHEN @without_executor <> 0 THEN       -- 1 - БЕЗ исполнителя, т.е. показывать задачи ТОЛЬКО системных пользователей;
+                0
+            WHEN @without_executor = 0 THEN        -- 0 - С исполнителем. т.е. показывать задачи ТОЛЬКО НЕ системных пользователей
+                1
+        END
+    
+    SET @with_task = IIF(@without_executor IS NOT NULL, 1, @with_task)
+
+    -- обработаем строку с номером
+    IF LEN(ISNULL(@phone, ''))>1
+    BEGIN
+        -- уберем из строки все символы кроме чисел
+        ;WITH locko_Phone AS (
+            SELECT
+                ch  = SUBSTRING(@phone, 1, 1),
+                s   = RIGHT(@phone, LEN(@phone)-1),
+                pos = 1
+
+            UNION ALL
+            SELECT
+                ch  = SUBSTRING(s, 1, 1),
+                s   = RIGHT(s, LEN(s)-1),
+                pos = pos + 1
+            FROM
+                locko_Phone
+            WHERE 
+                s!=''
+        ),
+        _Phone(s) AS (
+            SELECT
+                ISNULL(IIF(PATINDEX('[0-9]', ch)>0, ch, ''), '')
+            FROM
+                locko_Phone
+            ORDER BY
+                pos
+            FOR XML PATH('')
+        )
+        SELECT
+            @phone = NULLIF(RTRIM(LTRIM(s)), '')
+        FROM
+            _Phone
+        OPTION (MAXRECURSION 1000)
+    END
+
+    -- по одной цифре искать не будем
+    SET @phone = IIF(LEN(@phone)<=1, NULL, @phone)
+    
+    IF @phone IS NOT NULL
+    BEGIN
+        -- найдем заявки по номеру телефона
+        /*
+        ;WITH Participants AS (
+            SELECT 
+                p.Participant_id, p.FormatedPhoneString
+            FROM
+                dbo.v_MobilePhone as p WITH(NOEXPAND)
+            WHERE 
+                CHARINDEX(@phone, p.FormatedPhoneString)>0
+
+            UNION ALL
+            SELECT 
+                p.Participant_id, p.FormatedPhoneString
+            FROM
+                dbo.v_WorkPhone AS p WITH(NOEXPAND)
+            WHERE 
+                CHARINDEX(@phone, p.FormatedPhoneString)>0
+
+            UNION ALL
+            SELECT 
+                p.Participant_id, p.FormatedPhoneString
+            FROM
+                dbo.v_HomePhone AS p WITH(NOEXPAND)
+            WHERE 
+                CHARINDEX(@phone, p.FormatedPhoneString)>0
+
+            UNION ALL
+            SELECT 
+                p.Participant_id, p.FormatedPhoneString
+            FROM
+                v_RegPlacePhone AS p WITH(NOEXPAND)
+            WHERE 
+                CHARINDEX(@phone, p.FormatedPhoneString)>0
+        ),
+        l_app AS (
+            SELECT
+                t.[Application]
+            FROM
+                Participants as p
+                INNER JOIN dbo.v_Locko_TransactionParticipants AS t WITH(NOEXPAND)
+                ON t.id = p.Participant_id
+            WHERE
+                t.TransactionRole = 2 -- основной заёмщик
+
+            UNION
+            SELECT
+                p.[Application]
+            FROM
+                dbo.v_MainBorrowerPhones p WITH(NOEXPAND)
+            WHERE 
+                CHARINDEX(@phone, p.FormatedPhoneString)>0
+        )
+        INSERT INTO #Locko_id_list(id, [type])
+        SELECT a.[Application], 8 -- заявки найденные по номеру телефона
+        FROM l_app AS a
+        */
+        -- найдем заявки по номеру телефона
+        INSERT INTO #Locko_id_list(id, [type])
+        SELECT 
+            t.[Application],
+            8
+        FROM
+            dbo.v_MobilePhone as p WITH(NOEXPAND)
+            INNER JOIN dbo.v_Locko_TransactionParticipants AS t WITH(NOEXPAND)
+            ON t.id = p.Participant_id
+        WHERE 
+            CHARINDEX(@phone, p.FormatedPhoneString)>0
+            AND t.TransactionRole = 2 -- основной заёмщик
+        GROUP BY t.[Application]
+    END
+
+    IF @additional_filtering = 1
+    BEGIN
+        -- получим регионы текущего пользователя
+        INSERT INTO #Locko_id_list(id, [type])
+        SELECT 
+            b.Id, 1000
+        FROM
+            Locko_Branch AS b
+            INNER JOIN UserSecuritySetCache ug
+            ON b.CMGroup = ug.GroupId
+        WHERE
+            ElementType = 1
+            and ug.UserId = @current_user -- идентификатор пользователя
+
+        SET @current_user_region = 1
+
+    END
+    ELSE IF @additional_filtering = 2
+    BEGIN
+        /*
+        ;WITH Branch AS 
+        (
+            SELECT
+                Branch = Id,
+                Parent,
+                ElementType,
+                CMGroup,
+                lvl = 1
+            FROM
+                Locko_Branch 
+            WHERE
+                ElementType = 3
+
+            UNION ALL 
+            SELECT 
+                b.Branch,
+                l.Parent,
+                l.ElementType,
+                l.CMGroup,
+                lvl = b.lvl + 1
+            FROM 
+                Branch AS b
+                INNER JOIN Locko_Branch AS l
+                ON b.Parent = l.Id
+            WHERE
+                (b.lvl + 1)<50
+        )
+        INSERT INTO #Locko_id_list(id, [type]) -- 7 - отделения текущего пользователя
+        SELECT b.Id, 7 -- отделения текущего пользователя
+        FROM
+            Branch AS bb
+            INNER JOIN Locko_Branch as b
+                ON b.Id = bb.Branch
+            INNER JOIN UserSecuritySetCache ug
+                ON bb.CMGroup = ug.GroupId
+        WHERE
+            bb.ElementType=1
+            and ug.UserId = @current_user -- идентификтор пользователя
+        GROUP BY
+            b.Id
+        */
+        -- не поднимаемся по иерархии, а просто берем с пользователя
+        SELECT @current_user_branch = Branch
+        FROM [user]
+        WHERE Id = @current_user --AND Branch IS NOT NULL
+    END
+
+    SELECT
+        --данные по основному заёмщику т.е. если хоть что-то из этого есть нужно это учитывать
+        @transaction_role       =  IIF(
+                                    @full_name          IS NOT NULL
+                                    OR @birth_date      IS NOT NULL
+                                    OR @passport_series IS NOT NULL
+                                    OR @passport_number IS NOT NULL,
+                                    1,
+                                    0)
+
+    -- если хоть что-то задано
+    IF @creation_date_end IS NOT NULL OR @creation_date_begin IS NOT NULL
+    BEGIN
+        SELECT
+            @creation_date_begin    = ISNULL(@creation_date_begin, '1753-01-01'),                                                               -- Дата создания ОТ
+            @creation_date_end      = CAST(CONVERT(varchar(10), ISNULL(@creation_date_end, '9999-12-31'), 120) + ' 23:59:59.997' AS datetime)   -- Дата создания ДО
+    END
+
+    IF @approval_date_begin IS NOT NULL OR @approval_date_end IS NOT NULL
+    BEGIN
+        SELECT
+            @approval_date_begin    = ISNULL(@approval_date_begin, '1753-01-01'),                                                               -- Дата одобрения ОТ
+            @approval_date_end      = CAST(CONVERT(varchar(10), ISNULL(@approval_date_end, '9999-12-31'), 120) + ' 23:59:59.997' AS datetime)   -- Дата одобрения ДО
+    END
+
+    IF @date_of_completion_begin IS NOT NULL OR @date_of_completion_end IS NOT NULL
+    BEGIN
+        SELECT
+            @date_of_completion_begin   = ISNULL(@date_of_completion_begin, '1753-01-01'),                                                              -- Дата заполнения ОТ
+            @date_of_completion_end     = CAST(CONVERT(varchar(10), ISNULL(@date_of_completion_end, '9999-12-31'), 120) + ' 23:59:59.997' AS datetime)  -- Дата заполнения ДО
+    END
+
+    IF @amount_requested_begin IS NOT NULL OR @amount_requested_end IS NOT NULL
+    BEGIN
+        SELECT
+            @amount_requested_begin = ISNULL(@amount_requested_begin, 0),
+            @amount_requested_end   = ISNULL(@amount_requested_end, 922337203685477)
+    END
+
+    IF @loan_amount_preDecision_begin IS NOT NULL OR @loan_amount_preDecision_end IS NOT NULL
+    BEGIN
+        SELECT
+            @loan_amount_preDecision_begin  = ISNULL(@loan_amount_preDecision_begin, 0),
+            @loan_amount_preDecision_end    = ISNULL(@loan_amount_preDecision_end, 922337203685477)
+    END
+
+    IF @loan_amount_begin IS NOT NULL OR @loan_amount_end IS NOT NULL
+    BEGIN
+        SELECT
+            @loan_amount_begin  = ISNULL(@loan_amount_begin, 0),
+            @loan_amount_end    = ISNULL(@loan_amount_end, 922337203685477)
+    END
+
+    -- парсим XML если значений не будет переменные сбрасываем в NULL
+    if @status_list IS NOT NULL
+    BEGIN
+        INSERT INTO #Locko_statuses(id)
+        SELECT DISTINCT
+            TRY_CAST(t.f.value('(./@id)[1]', 'varchar(100)') AS uniqueidentifier)
+        FROM
+            @status_list.nodes('/items/item') t(f)
+        WHERE
+            TRY_CAST(t.f.value('(./@id)[1]', 'varchar(100)') AS uniqueidentifier) IS NOT NULL
+    END
+    ELSE
+    BEGIN
+        SET @status_list = '<items></items>'
+
+        INSERT INTO #Locko_statuses(id)
+        VALUES
+            ('34387afa-6b70-476f-9d34-748732059003'),
+            ('37a184b8-a81d-4177-9eb5-4ebe3dfae959'),
+            ('85707efe-806c-4ec6-8cd6-4d5e4edd8b19'),
+            ('112ea757-36f7-4859-b0d3-6cc0f5a04705'),
+            ('b9c9f74a-15ec-4337-9916-f02ffec83dd4'),
+            ('b0b6a339-ba74-4e46-b721-2733d7fb76a9'),
+            ('70918293-8b84-43be-ad39-181375d51373'),
+            ('98ff43bd-b897-41f0-adf2-4eb3b3783851')
+    END       
+
+    IF NOT EXISTS(SELECT TOP(1) 1 FROM #Locko_statuses)
+    BEGIN
+        SET @status_list = NULL
+    END
+
+    IF @app_executor_groups IS NOT NULL
+    BEGIN
+        INSERT INTO #Locko_id_list(id, [type])
+        SELECT DISTINCT
+            TRY_CAST(t.f.value('(./@id)[1]', 'varchar(100)') AS bigint),
+            1
+        FROM
+            @app_executor_groups.nodes('/items/item') t(f)
+        WHERE
+            TRY_CAST(t.f.value('(./@id)[1]', 'varchar(100)') AS bigint) IS NOT NULL
+
+        IF NOT EXISTS(SELECT TOP(1) 1 FROM #Locko_id_list WHERE [type]=1)
+        BEGIN
+            SET @app_executor_groups = NULL
+        END
+        ELSE
+        BEGIN
+            -- спустимся по иерархии групп вниз
+            ;WITH Groups_Map AS (
+                SELECT
+                    g.ParentId,
+                    g.ChildId
+                FROM
+                    dbo.UserGroup_Groups_Map as g
+                    INNER JOIN #Locko_id_list as l 
+                    ON g.ParentId = l.id
+                    AND l.[type] = 1
+
+                UNION ALL
+                SELECT 
+                    g.ParentId, 
+                    g.ChildId
+                FROM
+                    Groups_Map AS t
+                    INNER JOIN [dbo].[UserGroup_Groups_Map] as g
+                    ON t.ChildId = g.ParentId
+            )
+            INSERT INTO #Locko_id_list(id, [type])
+            SELECT DISTINCT
+                g.ChildId,
+                1
+            FROM    
+                Groups_Map AS g
+            OPTION (MAXRECURSION 1000)
+        END
+    END
+
+    --2
+    IF @incoming_channel IS NOT NULL
+    BEGIN
+        INSERT INTO #Locko_id_list(id, [type])
+        SELECT DISTINCT
+            TRY_CAST(t.f.value('(./@id)[1]', 'varchar(100)') AS bigint),
+            2
+        FROM
+            @incoming_channel.nodes('/items/item') t(f)
+        WHERE
+            TRY_CAST(t.f.value('(./@id)[1]', 'varchar(100)') AS bigint) IS NOT NULL
+
+        IF NOT EXISTS(SELECT TOP(1) 1 FROM #Locko_id_list WHERE [type]=2)
+        BEGIN
+            SET @incoming_channel = NULL
+        END
+    END
+
+    --3
+    IF @region IS NOT NULL
+    BEGIN
+        INSERT INTO #Locko_id_list(id, [type])
+        SELECT DISTINCT
+            TRY_CAST(t.f.value('(./@id)[1]', 'varchar(100)') AS bigint),
+            3
+        FROM
+            @region.nodes('/items/item') t(f)
+        WHERE
+            TRY_CAST(t.f.value('(./@id)[1]', 'varchar(100)') AS bigint) IS NOT NULL
+
+        IF NOT EXISTS(SELECT TOP(1) 1 FROM #Locko_id_list WHERE [type]=3)
+        BEGIN
+            SET @region = NULL
+        END
+    END
+
+    --4
+    IF @branch IS NOT NULL
+    BEGIN
+        INSERT INTO #Locko_id_list(id, [type])
+        SELECT DISTINCT
+            TRY_CAST(t.f.value('(./@id)[1]', 'varchar(100)') AS bigint),
+            4
+        FROM
+            @branch.nodes('/items/item') t(f)
+        WHERE
+            TRY_CAST(t.f.value('(./@id)[1]', 'varchar(100)') AS bigint) IS NOT NULL
+
+        IF NOT EXISTS(SELECT TOP(1) 1 FROM #Locko_id_list WHERE [type]=4)
+        BEGIN
+            SET @branch = NULL
+        END
+    END
+
+    --5
+    IF @executor IS NOT NULL
+    BEGIN
+        INSERT INTO #Locko_id_list(id, [type])
+        SELECT DISTINCT
+            TRY_CAST(t.f.value('(./@id)[1]', 'varchar(100)') AS bigint),
+            5
+        FROM
+            @executor.nodes('/items/item') t(f)
+        WHERE
+            TRY_CAST(t.f.value('(./@id)[1]', 'varchar(100)') AS bigint) IS NOT NULL
+
+        IF NOT EXISTS(SELECT TOP(1) 1 FROM #Locko_id_list WHERE [type]=5)
+        BEGIN
+            SET @executor = NULL
+        END
+    END
+
+    --6
+    IF @application_status IS NOT NULL
+    BEGIN
+        INSERT INTO #Locko_id_list(id, [type])
+        SELECT DISTINCT
+            TRY_CAST(t.f.value('(./@id)[1]', 'varchar(100)') AS bigint),
+            6
+        FROM
+            @application_status.nodes('/items/item') t(f)
+        WHERE
+            TRY_CAST(t.f.value('(./@id)[1]', 'varchar(100)') AS bigint) IS NOT NULL
+
+        IF NOT EXISTS(SELECT TOP(1) 1 FROM #Locko_id_list WHERE [type]=6)
+        BEGIN
+            SET @application_status = NULL
+        END
+    END
+
+    IF @utm_labels IS NOT NULL
+    BEGIN
+        INSERT INTO #utm_label(utm_label)
+        SELECT DISTINCT
+            RTRIM(LTRIM(t.f.value('(./@id)[1]', 'varchar(max)')))
+        FROM
+            @utm_labels.nodes('/items/item') t(f)
+        WHERE
+            ISNULL(RTRIM(LTRIM(t.f.value('(./@id)[1]', 'varchar(max)'))), '') != ''
+
+        IF NOT EXISTS(SELECT TOP(1) 1 FROM #utm_label)
+        BEGIN
+            SET @utm_labels = NULL
+        END
+        ELSE
+        BEGIN
+            INSERT INTO #utm_labeled_Application(Id)
+            SELECT
+                [Application]
+            FROM
+                dbo.v_Locko_Application_UTM_labels AS utm WITH(NOEXPAND)
+                INNER JOIN #utm_label as t
+                ON CHARINDEX(t.utm_label, utm.NameUTM)>0
+            GROUP BY
+                [Application]
+        END
+    END
+    
+    -- список Точек продаж. XML вида <items><item id="1" /><item id="1" /><item id="3" /><item id="4" /></items>
+    -- внимание обработка @point_of_sale должна быть раньше чем @contractor_legal
+    IF @point_of_sale IS NOT NULL
+    BEGIN
+        INSERT INTO #Locko_id_list(id, [type])
+        SELECT DISTINCT
+            TRY_CAST(t.f.value('(./@id)[1]', 'varchar(100)') AS bigint),
+            100
+        FROM
+            @point_of_sale.nodes('/items/item') t(f)
+        WHERE
+            TRY_CAST(t.f.value('(./@id)[1]', 'varchar(100)') AS bigint) IS NOT NULL
+
+        IF NOT EXISTS(SELECT TOP(1) 1 FROM #Locko_id_list WHERE [type]=100)
+        BEGIN
+            SET @point_of_sale = NULL
+        END
+    END
+    
+    -- список Контрагентов (Автосалоны) продаж. XML вида <items><item id="1" /><item id="1" /><item id="3" /><item id="4" /></items>
+    IF @contractor_legal IS NOT NULL
+    BEGIN
+        INSERT INTO #Locko_id_list(id, [type])
+        SELECT DISTINCT
+            TRY_CAST(t.f.value('(./@id)[1]', 'varchar(100)') AS bigint),
+            101
+        FROM
+            @contractor_legal.nodes('/items/item') t(f)
+        WHERE
+            TRY_CAST(t.f.value('(./@id)[1]', 'varchar(100)') AS bigint) IS NOT NULL
+
+        IF NOT EXISTS(SELECT TOP(1) 1 FROM #Locko_id_list WHERE [type]=101)
+        BEGIN
+            SET @contractor_legal = NULL
+        END
+        ELSE
+        BEGIN
+            -- получим все точки продаж контрагента
+            INSERT INTO #Locko_id_list(id, [type])
+            SELECT
+                ps.Child, --  Locko_PointOfSale.Id -- его точки продаж
+                100
+            FROM
+                dbo.ContractorLegal AS cl
+                INNER JOIN #Locko_id_list AS l
+                ON (cl.HeadOrganozation = l.id or cl.id = l.id)
+                AND l.[type]=101
+                INNER JOIN M_CL_PointsOfSale AS ps
+                ON ps.Parent = cl.id
+            WHERE 
+                @point_of_sale IS NULL -- если тут пусто значит список точек продаж нам не передали
+                -- или он какой-то не очень хороший
+                -- поэтому заполняем этот список найденными значениями
+                -- иначе используем переданный нам список значений 
+            GROUP BY
+                ps.Child
+        END
+    END
+
+    IF EXISTS(SELECT TOP(1) 1 FROM #Locko_id_list WHERE [type]=100) AND @point_of_sale IS NULL
+    BEGIN
+        -- если тут что-то есть
+        -- нужно заполнить значением переменную @point_of_sale
+        -- иначе фильтрация не будет работать.
+        SET @point_of_sale = CAST('<items><i>1</i></items>' AS xml)
+    END
+    
+    /*******************************************************/
+    -- сформируем список групп Верификаторы и Андерайтеры
+    ;WITH Groups_Map AS (
+        SELECT
+            g.ParentId,
+            g.ChildId
+        FROM
+            dbo.UserGroup_Groups_Map as g
+            INNER JOIN (
+                SELECT Id
+                FROM UserGroup
+                WHERE 
+                    Uid in(
+                        '20439DE9-A52A-41BC-B493-56B9E02C761C',
+                        '6EB97119-27FD-4D97-B8AD-F952ED24CB28',
+                        '441ED4CB-A646-4E46-B2DB-8817D17F9F85',
+                        'FAE60181-D861-42AA-A3A9-3820BBE6FBBE',
+                        '57933C8C-EBA8-4FDC-8614-899ECCF6F8FA',
+                        'BCF6253D-2197-459B-A70F-1A7526EFA296',
+                        'A258A336-9612-448D-8B28-CC65149E9283',
+                        '304D13D6-5384-4F9C-BE17-79ECDD3AA6BD',
+                        '20439DE9-A52A-41BC-B493-56B9E02C761C',
+                        '8DF29A76-0BB2-425D-9440-E03F478F235F',
+                        'F9FE0C8D-F220-4F70-A81C-248661112AD1',
+                        '568C36C4-8A7F-46C5-86BA-6CCDF4215405'
+                    )
+            ) as l 
+            ON g.ParentId = l.id
+
+        UNION ALL
+        SELECT 
+            g.ParentId, 
+            g.ChildId
+        FROM
+            Groups_Map AS t
+            INNER JOIN [dbo].[UserGroup_Groups_Map] as g
+            ON t.ChildId = g.ParentId
+    )
+    INSERT INTO #Locko_id_list(id, [type])
+    SELECT
+        g.ParentId,
+        99
+    FROM    
+        Groups_Map AS g
+    UNION
+    SELECT
+        g.ChildId,
+        99
+    FROM    
+        Groups_Map AS g
+
+    -- Текущий пользователь входит в группу "Верификаторы и андеррайтеры"
+    IF EXISTS (
+        SELECT 1
+        FROM
+            dbo.UserSecuritySetCache AS ug
+            INNER JOIN #Locko_id_list as i
+            ON i.id=ug.GroupId
+            AND i.[type] = 99
+        WHERE
+            ug.UserId = @current_user
+    )
+    BEGIN
+        SET @current_user_underwriter = 1 -- текущий пользователь андеррайтер
+    END
+    /*******************************************************/
+
+    --#region Наличие ролей "Не отображать заявки"
+    SELECT
+        @dont_show_ac                       = ISNULL(MAX(CASE WHEN ug.[Uid] = '2E275FF3-C7F4-4AA3-97ED-33C69ED5C91A' THEN 1 END), 0), --Не отображать заявки по АК
+        @dont_show_cc_with_collateral       = ISNULL(MAX(CASE WHEN ug.[Uid] = '46B677F9-8451-4F6B-9F96-0AE1DAFA67D9' THEN 1 END), 0), --Не отображать залоговые заявки по ПК
+        @dont_show_cc_without_collateral    = ISNULL(MAX(CASE WHEN ug.[Uid] = '3D01C365-280A-416D-AE13-B076F5BB2097' THEN 1 END), 0), --Не отображать беззалоговые заявки по ПК
+        @show_ac_msk_spb_only               = ISNULL(MAX(CASE WHEN ug.[Uid] = '46A68EAF-CFDE-4311-93B2-40A68AFC0358' THEN 1 END), 0), --Отображать только заявки МСК и СПб
+        @show_ac_region_only                = ISNULL(MAX(CASE WHEN ug.[Uid] = '960A9A3F-581D-47A8-951F-360EE94A57A7' THEN 1 END), 0)  --Отображать только заявки регионов
+    FROM
+        dbo.UserSecuritySetCache AS us
+            INNER JOIN dbo.UserGroup AS ug
+            ON ug.Id = us.GroupId
+    WHERE
+        us.UserId = @current_user
+    --#endregion Наличие ролей "Не отображать заявки"
+
+    --#region Список регионов МСК СПБ
+    -- Имеет смысл проверять только в случае, если нет запрета на показ АК и установлен только один из признаков региональности
+    IF @dont_show_ac = 0
+        AND 
+        (
+            (
+                @show_ac_msk_spb_only = 0 AND 
+                @show_ac_region_only  = 1
+            ) 
+            OR
+            (
+                @show_ac_msk_spb_only = 1 AND 
+                @show_ac_region_only  = 0
+            )
+        )
+    BEGIN
+        
+        ;WITH cte_branch AS
+        (
+            SELECT 
+                lb.Id,
+                lb.Parent,
+                lb.[Uid]
+            FROM dbo.Locko_Branch lb
+            WHERE lb.[Uid] IN ('87A9F1CA-EC04-42C5-85BE-7C854FEADE6F', '25E3A975-493F-405B-879A-08F501DF1340') -- МСК СПБ
+            UNION ALL 
+            SELECT 
+                lb.Id,
+                lb.Parent,
+                lb.[Uid]
+            FROM dbo.Locko_Branch lb
+                INNER JOIN cte_branch cb
+                ON cb.Id = lb.Parent
+        )
+        INSERT INTO #msk_spb(Id)
+        SELECT Id
+        FROM cte_branch
+    
+    END
+    ELSE -- Смысла проверять нет
+    BEGIN 
+            
+        SELECT 
+           @show_ac_msk_spb_only = 1, 
+           @show_ac_region_only  = 1
+         
+    END  
+    --#endregion 
+
+/***************************************************************/
+-- ограничение для КМ
+DECLARE @is_KM int
+
+    -- сформируем список групп Верификаторы и Андерайтеры
+    ;WITH Groups_Map AS (
+        SELECT
+            g.ParentId,
+            g.ChildId
+        FROM
+            dbo.UserGroup_Groups_Map as g
+            INNER JOIN (
+                SELECT *
+                FROM UserGroup
+                WHERE 
+                    id = 102  -- Кредитные менеджеры и колл-центр
+            ) as l 
+            ON g.ParentId = l.id
+
+        UNION ALL
+        SELECT 
+            g.ParentId, 
+            g.ChildId
+        FROM
+            Groups_Map AS t
+            INNER JOIN [dbo].[UserGroup_Groups_Map] as g
+            ON t.ChildId = g.ParentId
+    ),
+    groups(GroupId) AS (
+        SELECT ParentId FROM Groups_Map
+        union SELECT ChildId FROM Groups_Map
+    )
+    select @is_KM = sum(IIF(g.GroupId IS NOT NULL, 1, 0)) 
+    from dbo.UserSecuritySetCache AS c
+        LEFT JOIN groups AS g 
+        ON c.GroupId = g.GroupId
+    WHERE
+        c.GroupId <> 2 -- Все пользователи
+        and UserId = @current_user
+        
+    --SET @is_KM = IIF(ISNULL(@is_KM, 0)>0, 183, 1200)
+    
+    SET @creation_date_begin = ISNULL(@creation_date_begin, DATEADD(month, IIF(@is_KM > 0, -6, -600), GETDATE())) -- минус полгода или 100 лет
+    SET @creation_date_end   = ISNULL(@creation_date_end, '2100-01-01')
+    
+/***************************************************************/
+
+/* ****  Ограничение для КМ по CRC-1286 */
+    DECLARE 
+        @is_KM_1286 int, -- КМ в терминах 1286 отличается
+        @is_CC_1286 int  -- Контакт-центр
+
+    IF EXISTS 
+        (
+            SELECT
+                ug.Id
+            FROM dbo.UserGroup ug
+                INNER JOIN dbo.UserSecuritySetCache AS c
+                ON c.GroupId = ug.Id                 
+            WHERE c.UserId = @current_user AND 
+                (ug.Name LIKE 'КМ %' OR ug.Name = 'Кредитные менеджеры') 
+            
+        )
+        SET @is_KM_1286 = 1
+    ELSE                  
+        SET @is_KM_1286 = 0
+
+    IF EXISTS 
+        (
+            SELECT
+                ug.Id
+            FROM dbo.UserGroup ug
+                INNER JOIN dbo.UserSecuritySetCache AS c
+                ON c.GroupId = ug.Id                 
+            WHERE c.UserId = @current_user AND 
+                ug.Name IN 
+                    (
+                        'Колл-центр',
+                        'Руководитель колл-центра',
+                        'Колл-центр - согласование НСТ',
+                        'Дистанционный офис'
+                    )            
+        )
+        SET @is_CC_1286 = 1
+    ELSE                  
+        SET @is_CC_1286 = 0
+
+/***************************************************************/
+
+
+    IF @with_task = 1
+    BEGIN
+        INSERT INTO #TaskBase_Application
+        (
+            [Application]
+        )
+        SELECT  [Application]
+        FROM
+            dbo.TaskBase                                        AS tb
+            INNER JOIN #Locko_statuses                          AS s
+                ON s.id = tb.Status
+            LEFT JOIN   dbo.WorkflowBookmark                    AS wfb
+                ON tb.WorkflowBookmark = wfb.Id
+            LEFT JOIN #Locko_id_list                            AS g -- это пункт 25 
+                ON g.id = tb.ApplicationExecutorGroup
+                AND g.[type] = 1
+            LEFT JOIN #Locko_id_list                            AS l5 -- это пункт 12
+                ON l5.id =tb.Executor
+                AND l5.[type] = 5
+            LEFT JOIN @system_users                             AS su
+                ON tb.Executor = su.[user_id]
+        WHERE
+            tb.CreationDate > @creation_date_begin AND 
+            tb.[Application] IS NOT NULL
+            AND (
+                wfb.ElementUid = @elementUid
+                OR @elementUid IS NULL
+            )
+            AND (
+                --Дистанционный офис - 3
+                tb.ShowToRemoteOffice != 0 
+                OR @additional_filtering != 3 -- или у нас какой-то другой способ фильтрации
+            )
+            AND (
+                -- Колл-центр - 4
+                tb.ShowToRemoteOffice = 0 
+                OR @additional_filtering != 4 -- или у нас какой-то другой способ фильтрации
+                -- CRC-1286 разрешить смотреть такие задачи КЦ независимо от канала поступления
+                OR 
+                (
+                    tb.[Subject] = 'Выбор даты и времени сделки и способа оформления' AND 
+                    @is_CC_1286 = 1
+                ) 
+            )
+            AND (
+                g.id IS NOT NULL
+                OR @app_executor_groups IS NULL
+            )
+            AND (
+                l5.id IS NOT NULL
+                OR @executor IS NULL
+            )
+            AND 
+            (
+                su.[user_id] IS NULL -- т.е. только те пользователи, которых нет в таблице @system_users
+                OR @exclude_system_tasks = 0 -- или когда мы не исключаем системных пользователей
+            )
+            AND
+            (
+                su.[user_id] IS NOT NULL -- задачи только системных пользователей для @without_executor<>0
+                OR ISNULL(@without_executor, 0) = 0
+            )
+            /*
+            SET @exclude_system_tasks = 
+                CASE 
+                    WHEN @without_executor IS NULL THEN     -- NULL - отбор любых задач
+                        @exclude_system_tasks
+                    WHEN @without_executor = 0 THEN        -- 0 - С исполнителем. т.е. показывать задачи ТОЛЬКО НЕ системных пользователей
+                        1
+                    WHEN @without_executor <> 0 THEN       -- 1 - БЕЗ исполнителя, т.е. показывать задачи ТОЛЬКО системных пользователей;
+                        0
+                END
+            */
+
+
+        GROUP BY [Application]
+    END
+
+    PRINT CONCAT(@is_KM_1286, @is_CC_1286)
+
+    IF @simple_search IS NOT NULL
+    BEGIN
+        -- выполним простой поиск
+
+        ;WITH simple_search(Id) AS (
+            -- по наименованию заявки
+            SELECT 
+                this_.Id
+            FROM    
+                dbo.Locko_Application   AS this_
+            WHERE
+                CHARINDEX(@simple_search, this_.[Name])>0
+                AND this_.CreationDate > @creation_date_begin
+
+            -- по ФИО основного заёмщика
+            UNION ALL
+            SELECT
+                locko_tran1_.[Application]
+            FROM
+                dbo.v_Locko_TransactionParticipants AS locko_tran1_ WITH(NOEXPAND)
+            WHERE
+                CHARINDEX(@simple_search, locko_tran1_.FullName)>0
+                AND locko_tran1_.TransactionRole = 2 -- основной заёмщик
+
+            -- найдем заявки по номеру телефона
+            UNION ALL
+            SELECT 
+                t.[Application]
+            FROM
+                dbo.v_MobilePhone as p WITH(NOEXPAND)
+                INNER JOIN dbo.v_Locko_TransactionParticipants AS t WITH(NOEXPAND)
+                ON t.id = p.Participant_id
+            WHERE 
+                CHARINDEX(@simple_search, p.FormatedPhoneString)>0
+                AND t.TransactionRole = 2 -- основной заёмщик
+        )
+        INSERT INTO #simple_search_Application(Id)
+        SELECT
+            Id
+        FROM
+            simple_search
+        GROUP BY
+            Id
+    END
+
+/****************************************************************/
+        --Приоритеты при отборе:
+        --1. Задача, в которой исполнителем является текущий пользователь      
+        --        dbo.TaskBase.Executor = @current_user.
+        --2. Задача, в группу исполнителя (app.ExecutorGroup) которой входит текущий пользователь
+        --        dbo.TaskBase.ApplicationExecutorGroup
+        --    -- группы пользователя
+        --    select GroupId
+        --    from UserSecuritySetCache ug
+        --    where ug.UserId = 8082
+
+        --3. Любая другая задача кроме задачи мониторинга на мошенничество 
+        --4. Задача по процессу "Мониторинг на мошенничество" (если пп.1-3 не выполнились)
+    CREATE TABLE #temp_Locko_TaskBase
+    (
+        [Application]   bigint NOT NULL PRIMARY KEY,
+        id              bigint NOT NULL,
+        [Rank]          int,                            -- t.time_range,
+        Executor        bigint,
+        task_name_flag  int
+    )
+
+    ;WITH cte_hardcoded_user_groups (GroupId) AS -- Таблица 1 CRC-822
+    (
+        SELECT 
+            GroupId = [ChildId]  
+        FROM [dbo].[UserGroup_Groups_Map]  
+            INNER Join ELMA.dbo.UserGroup AS UG  
+            ON UG.Id = ParentId 
+        WHERE UG.Uid='2871CA56-7990-4888-B48D-4BE7E1C3C498'
+    )
+    INSERT INTO #temp_Locko_TaskBase
+    (
+        id,
+        [Application],
+        [Rank],
+        Executor,
+        task_name_flag
+    )
+    SELECT 
+        t.id,
+        t.[Application],
+        [Rank] = ISNULL(tr.TimeRank, 0), --t.time_range,
+        t.Executor,
+        task_name_flag
+    FROM (
+        SELECT
+            RN = ROW_NUMBER() OVER 
+                (
+                    PARTITION BY tb.[Application] -- нумеруем строки в рамках одной заявки
+                    ORDER BY
+                        CASE 
+                            WHEN tb.Executor=@current_user  THEN 0   -- Задача, в которой исполнителем является текущий пользователь 
+                            WHEN ug.UserId IS NOT NULL      THEN 1
+                            WHEN w.WorkflowBookmark IS NOT NULL THEN 3
+                            ELSE 2
+                        END
+                ),
+            tb.id,
+            tb.[Application],
+            time_range = DATEDIFF(minute, tb.CreationDate, GETDATE()),
+            tb.Executor,
+            tb.ExecutorPrevious, 
+            task_name_flag = 
+                CASE WHEN 
+                    tb.[Subject] IN 
+                        ( -- список для CRC-1286
+                            'Заполнение заявки',
+                            --'Предварительное одобрение',
+                            'Доработка анкеты',
+                            'Корректировка файлов',
+                            'Изменение анкеты'--,
+                            --'Подготовка к сделке'
+                        )
+                        THEN 1
+                    --WHEN tb.[Subject] = 'Выбор даты и времени сделки и способа оформления'
+                      --  THEN 2  
+                    ELSE 0
+                END 
+        FROM
+            dbo.TaskBase                                        AS tb
+            INNER JOIN #Locko_statuses                          AS s
+                ON s.id = tb.Status
+            LEFT JOIN   dbo.WorkflowBookmark                    AS wfb
+                ON tb.WorkflowBookmark = wfb.Id
+            LEFT JOIN #Locko_id_list                            AS g -- это пункт 25 
+                ON g.id = tb.ApplicationExecutorGroup
+                AND g.[type] = 1
+            LEFT JOIN #Locko_id_list                            AS l5 -- это пункт 12
+                ON l5.id =tb.Executor
+                    AND l5.[type] = 5
+            LEFT JOIN @system_users                             AS su
+                ON tb.Executor = su.[user_id]
+            LEFT JOIN dbo.UserSecuritySetCache                  AS ug
+                ON ug.UserId = @current_user
+                    AND ug.GroupId = tb.ApplicationExecutorGroup
+            LEFT JOIN dbo.v_WorkflowBookmark_Token w WITH(NOEXPAND)
+                ON w.WorkflowBookmark = tb.WorkflowBookmark 
+                    AND w.Token = 1 
+            LEFT JOIN dbo.Locko_Application la
+                ON la.Id = tb.[Application]    
+        WHERE
+            tb.CreationDate > @creation_date_begin AND
+            tb.[Application] IS NOT NULL
+            AND (
+                wfb.ElementUid = @elementUid
+                OR @elementUid IS NULL
+            )
+            AND (
+                --Дистанционный офис - 3
+                tb.ShowToRemoteOffice != 0 
+                OR @additional_filtering != 3 -- или у нас какой-то другой способ фильтрации
+            )
+            AND (
+                -- Колл-центр - 4
+                tb.ShowToRemoteOffice = 0 
+                OR @additional_filtering != 4 -- или у нас какой-то другой способ фильтрации
+                OR 
+                (
+                    tb.[Subject] = 'Выбор даты и времени сделки и способа оформления' AND 
+                    @is_CC_1286 = 1                    
+                )
+            )
+            AND (
+                g.id IS NOT NULL
+                OR @app_executor_groups IS NULL
+            )
+            AND (
+                l5.id IS NOT NULL
+                OR @executor IS NULL
+            )
+            AND 
+            (
+                su.[user_id] IS NULL -- т.е. только те пользователи, которых нет в таблице @system_users
+                OR @exclude_system_tasks = 0 -- или когда мы не исключаем системных пользователей
+            )
+            AND
+            (
+                su.[user_id] IS NOT NULL -- задачи только системных пользователей для @without_executor<>0
+                OR ISNULL(@without_executor, 0) = 0
+            )
+            -- CRC-822 Исключить задачи
+            AND
+            (
+                tb.Executor IS NULL OR 
+                la.ApplicationStatus IS NULL OR 
+                NOT 
+                (
+                    -- 5.1.2
+                    tb.Executor = 2  
+                    -- 5.1.1 текущая задача позаявке TaskBase.Application.ApplicationStatus.ID=3
+                    AND la.ApplicationStatus = 3 
+                    -- 5.1.3 непустое значение TaskBase.ExecutorPrevious
+                    AND tb.ExecutorPrevious IS NOT NULL 
+                    -- 5.1.4 текущий пользователь и предыдущий исполнитель (TaskBase.ExecutorPrevious) одновременно НЕ входит в одну из групп (Таблица  1)
+                    AND NOT EXISTS 
+                        (
+                            SELECT *
+                            FROM dbo.UserSecuritySetCache ussc
+                            WHERE ussc.UserId = @current_user
+                                AND ussc.GroupId = ANY (SELECT GroupId FROM cte_hardcoded_user_groups) -- (Таблица  1)
+                                AND EXISTS 
+                                (
+                                    SELECT *
+                                    FROM dbo.UserSecuritySetCache ge
+                                    WHERE ge.UserId = tb.ExecutorPrevious
+                                        AND ge.GroupId = ussc.GroupId
+                                )
+                        )            
+                )
+            )
+            -- конец CRC-822 Исключить задачи
+    ) AS t
+    OUTER APPLY
+    (
+        SELECT 
+            tr.TimeRank
+        FROM
+            @Locko_TimeRank as tr
+        WHERE
+            IIF(t.time_range<0, 0, t.time_range) BETWEEN tr.RangeTimeFrom AND tr.RangeTimeTill
+    ) AS tr
+    WHERE t.RN=1
+    OPTION (RECOMPILE)
+    
+        
+    
+/****************************************************************/
+   
+    -- тут пункты 4,5,6,7
+    ;WITH TransactionParticipants AS (
+        SELECT DISTINCT 
+            locko_tran1_.[Application]
+        FROM
+            dbo.v_Locko_TransactionParticipants             AS locko_tran1_ WITH(NOEXPAND)
+        WHERE
+            locko_tran1_.TransactionRole = 2 -- основной заёмщик
+            -- пункт номер 4
+            AND (
+                CHARINDEX(@full_name, locko_tran1_.FullName)>0
+                OR @full_name IS NULL
+            )
+            -- пункт номер 5  Дата рождения -- тут может в теории быть время
+            AND (
+                locko_tran1_.BirthDate = @birth_date -- точное совпадение
+                OR @birth_date IS NULL
+                )
+            -- пункт номер 6
+            AND (
+                locko_tran1_.PassportSeries = @passport_series
+                OR @passport_series IS NULL
+                )
+            -- пункт номер 7
+            AND (
+                locko_tran1_.PassportNumber = @passport_number
+                OR @passport_number IS NULL
+                )
+    ),
+    L_Application AS (
+        -- фильтруем Locko_Application
+        SELECT
+            this_.Id,
+            TaskBaseId = tb.Id,
+            [Rank] = ISNULL(tb.[Rank], 0) + ISNULL(this_.ApplicationRank ,0),
+            this_.CreationDate                                                 -- Дата поступления
+        FROM    
+            dbo.Locko_Application                                   AS this_
+            LEFT JOIN #temp_Locko_TaskBase                          AS tb
+                ON tb.[Application] = this_.Id
+            LEFT JOIN TransactionParticipants                       AS TrPr
+                ON TrPr.[Application] = this_.id
+            LEFT JOIN dbo.Locko_DecisionOnApplication               AS locko_decs0_
+                ON locko_decs0_.id = this_.SelectedDecisionOnApp
+            LEFT JOIN dbo.Locko_Program                             AS locko_prg0_
+                ON locko_decs0_.Program = locko_prg0_.Id
+            LEFT JOIN dbo.Locko_Product                             AS lp
+                ON lp.id = this_.CreditType
+            LEFT JOIN dbo.Locko_ProductOption                       AS locko_ProOp0_
+                ON locko_ProOp0_.id = this_.SelectedProductsOption
+            LEFT JOIN dbo.Locko_Program                             AS lpr -- для определения признака залога
+                ON lpr.Id = locko_ProOp0_.Program                
+            LEFT JOIN Locko_ConsumerApplicationInf                  AS locko_ConAppI
+                ON this_.AdditionalProperties = locko_ConAppI.Id
+            LEFT JOIN #Locko_id_list                                AS l2 -- это пункт 8
+                ON l2.id = this_.IncomingChannel
+                AND l2.[type] = 2
+            LEFT JOIN #Locko_id_list                                AS l3 -- это пункт 9
+                ON l3.id = this_.Region
+                AND l3.[type] = 3
+            LEFT JOIN #Locko_id_list                                AS l4 -- это пункт 10
+                ON l4.id = this_.Branch
+                AND l4.[type] = 4
+            LEFT JOIN #Locko_id_list                                AS l6 -- это пункт 12
+                ON l6.id =this_.ApplicationStatus
+                AND l6.[type] = 6
+            LEFT JOIN #Locko_id_list                                AS l8 -- 8 поиск по номеру телефона
+                ON l8.id = this_.id
+                AND l8.[type] = 8
+            LEFT JOIN #simple_search_Application                    AS lss -- простой поиск
+                ON lss.Id = this_.Id
+            LEFT JOIN #utm_labeled_Application                      AS utm -- поиск по utm метке
+                ON utm.Id = this_.id
+            LEFT JOIN #Locko_id_list                                AS lregion
+                ON lregion.id = this_.Region
+                AND lregion.[type] = 1000
+            LEFT JOIN #Locko_id_list                                AS lpos
+                ON lpos.id = this_.PointOfSale
+                AND lpos.[type] = 100
+            LEFT JOIN #msk_spb ms
+                ON ms.Id = this_.Branch
+        WHERE
+            (   -- Тип кредита
+                @credit_type IS NULL
+                OR this_.CreditType = @credit_type
+                OR locko_decs0_.CreditType = @credit_type
+                OR locko_ProOp0_.Product = @credit_type
+            )
+            AND ( -- Точки продаж
+                lpos.id IS NOT NULL
+                OR @point_of_sale IS NULL
+            )
+            AND (
+                utm.Id IS NOT NULL
+                OR @utm_labels IS NULL
+            )
+            AND (
+                lss.Id IS NOT NULL
+                OR @simple_search IS NULL
+            )
+            AND (
+                tb.[Application] IS NOT NULL  
+                OR @with_task = 0  -- если равно 1, выводить заявки только если есть задачи по ним
+            )
+            AND (
+                l8.id IS NOT NULL
+                OR @phone IS NULL
+            )
+            AND(
+                this_.Branch = @current_user_branch
+                OR @current_user_branch IS NULL
+            )
+            AND (
+                l2.id IS NOT NULL
+                OR @incoming_channel IS NULL
+            )
+            AND (
+                l3.id IS NOT NULL
+                OR @region IS NULL
+            )
+            AND (
+                l4.id IS NOT NULL
+                OR @branch IS NULL
+            )
+            AND (
+                l6.id IS NOT NULL
+                OR @application_status IS NULL
+            )
+            AND this_.CreationDate BETWEEN @creation_date_begin AND @creation_date_end -- точное совпадение
+            AND(
+                this_.ApprovalDate BETWEEN @approval_date_begin AND @approval_date_end -- точное совпадение
+                OR @approval_date_begin IS NULL
+            )
+            AND (
+                this_.DateOfCompletion BETWEEN @date_of_completion_begin AND @date_of_completion_end -- точное совпадение
+                OR @date_of_completion_begin IS NULL
+            )
+            AND (
+                this_.CreationAuthor = @creation_author
+                OR @creation_author IS NULL
+            )
+            AND (
+                this_.ManagerIssued = @manager_issued
+                OR @manager_issued IS NULL
+            )
+            AND ( 
+                this_.ManagerFullfilled = @manager_fullfilled
+                OR @manager_fullfilled IS NULL
+            )
+            AND (
+                this_.ManagerDeclined = @manager_declined
+                OR @manager_declined IS NULL
+            )
+            AND (
+                this_.LoanAmountPreDecision BETWEEN @loan_amount_preDecision_begin AND @loan_amount_preDecision_end
+                OR @loan_amount_preDecision_begin IS NULL
+            )
+            AND (   
+                -- регион текущего пользователя
+                lregion.Id IS NOT NULL
+                OR @current_user_region IS NULL
+            )
+            AND (
+                @transaction_role = 0 OR -- учтем элементы фильтра по TransactionParticipant когда нужно
+                TrPr.[Application] IS NOT NULL 
+            )
+            AND (
+                locko_decs0_.LoanAmount BETWEEN @loan_amount_begin AND @loan_amount_end
+                OR @loan_amount_begin IS NULL
+            )
+            AND (
+                COALESCE(locko_decs0_.LoanAmount, this_.LoanAmountPreDecision, locko_ConAppI.AmountRequested)             -- Запрашиваемая сумма
+                    BETWEEN @amount_requested_begin AND @amount_requested_end
+                OR @amount_requested_begin IS NULL
+            )
+            AND(
+                CHARINDEX(@application_number, this_.ApplicationNumber)>0
+                OR @application_number IS NULL
+            )
+            -- Обработка групп "Не отображать"
+            AND NOT (
+                @dont_show_ac = 1 AND                    -- группа: не показывать автокредит
+                ISNULL(lp.Code, -1) = 3 AND              -- и это автокредит
+                ISNULL(tb.Executor, -1) != @current_user -- и пользователь не исполнитель этой задачи
+            )        
+            AND NOT (
+                @dont_show_cc_with_collateral = 1 AND    -- группа: не показывать потреб.кредит с залогом
+                ISNULL(lp.Code, -1) = 1 AND              -- и это потреб.кредит
+                ISNULL(lpr.IsCollateral, 0) = 1 AND      -- и залог есть                                                     
+                ISNULL(tb.Executor, -1) != @current_user -- и пользователь не исполнитель этой задачи
+            )        
+            AND NOT (
+                @dont_show_cc_without_collateral = 1 AND -- группа: не показывать потреб.кредит без залога
+                ISNULL(lp.Code, -1) = 1 AND              -- и это потреб.кредит
+                ISNULL(lpr.IsCollateral, 0) = 0 AND      -- и залога нет                                                     
+                ISNULL(tb.Executor, -1) != @current_user -- и пользователь не исполнитель этой задачи
+            )
+            AND -- Группы показывать или нет автокредиты мск спб регион
+            ( 
+                (@show_ac_msk_spb_only = 1 AND @show_ac_region_only  = 1) -- нет смысла проверять
+                OR
+                ISNULL(tb.Executor, -1) = @current_user  -- пользователь исполнитель этой задачи
+                OR
+                (
+                    @show_ac_msk_spb_only = 1 AND
+                    ms.Id IS NOT NULL 
+                )  
+                OR
+                ( 
+                    @show_ac_region_only  = 1 AND
+                    ms.Id IS NULL  
+                )
+            )
+            AND -- Ограничения для КМ CRC-1286
+            ( -- Показать как было если
+                @is_KM_1286 = 0 -- пользователь не КМ
+                OR
+                @is_CC_1286 = 1 -- если пользователь КЦ, то тоже разрешим смотреть, не смотря на то, что он КМ
+                OR
+                this_.IncomingChannel = 3 -- Канал поступления ручной ввод
+                OR
+                tb.task_name_flag = 0 -- Задача не в состоянии из списка
+                OR
+                tb.task_name_flag IS NULL  
+            )
+    )--,
+    --cte_selection AS
+    --(
+    --    SELECT 
+    --        Id
+    --    FROM
+    --        L_Application
+    --    ORDER BY 
+    --        [Rank] DESC,
+    --        CreationDate DESC
+    --    OFFSET @from_index ROWS
+    --    FETCH NEXT @count ROWS ONLY
+    --)
+    INSERT INTO #L_Application
+    (
+        [Rank],
+        Id,
+        CreationDate,
+        TaskBase_Id,
+        total_count
+    )
+    SELECT
+        [Rank],
+        Id,
+        CreationDate,
+        TaskBase_Id = TaskBaseId,
+        total_count = total.[count]
+    FROM
+        L_Application
+        CROSS APPLY (SELECT [count] = COUNT(*) FROM L_Application) total
+    --WHERE L_Application.Id = ANY(SELECT Id FROM cte_selection) 
+    ORDER BY 
+        [Rank] DESC,
+        CreationDate DESC
+    OFFSET @from_index ROWS
+    FETCH NEXT @count ROWS ONLY
+    OPTION (RECOMPILE)
+
+    -- всего страниц
+    SET @total_count = ISNULL((SELECT TOP 1 total_count FROM #L_Application), 0)
+    SET @total_pages = CEILING(@total_count*1.0 / @count*1.0)
+    
+    /*********************************************/
+    ;WITH Locko_TaskBase AS
+    (
+        SELECT 
+            t.id,
+            t.[Application],
+            t.CreationDate,
+            t.WorkflowBookmark,
+            t.[Subject],
+            t.Executor,
+            t.Status,
+            t.ApplicationExecutorGroup,
+            t.ShowToRemoteOffice
+        FROM (
+            SELECT
+                tb.id,
+                tb.[Application],
+                tb.CreationDate,
+                tb.WorkflowBookmark,
+                tb.[Subject],
+                tb.Executor,
+                tb.Status,
+                tb.ApplicationExecutorGroup,
+                tb.ShowToRemoteOffice
+            FROM
+                #L_Application                                      AS lat
+                INNER JOIN dbo.TaskBase                             AS tb
+                    ON tb.Id = lat.TaskBase_id
+                LEFT JOIN   dbo.WorkflowBookmark                    AS wfb
+                    ON tb.WorkflowBookmark = wfb.Id
+        ) AS t
+    ),
+    TransactionParticipants AS (
+        SELECT
+            locko_tran1_.[Application],
+            locko_tran1_.Scoring,
+            locko_tran1_.AFScoreSegment,
+            locko_tran1_.TransactionRole,
+            FullName = LEFT(locko_tran1_.FullName, 300),
+            ClientCategoryName = LEFT(locko_ctct0_.[Name], 300),
+            CollaterallOffer = 
+                                TRY_CAST(
+                                        IIF(
+                                        EXISTS(
+                                            -- Для остальных ролей:
+                                            -- Наличие в учасниках сделки (Locko_TransactionParticipant) имущества (Locko_Property) с признаком PledgeAsCollaterallOffer
+                                            SELECT  1
+                                            FROM   dbo.Locko_Property AS locko_lprop0_
+                                            WHERE   locko_lprop0_.TransactionParticipant = locko_tran1_.id
+                                                    AND locko_lprop0_.PledgeAsCollaterallOffer = 1
+                                        ),
+                                        1,
+                                        0
+                                    )
+                                AS bit),
+            BusinessOwner =   
+                                (
+                                    SELECT TOP 1
+                                        lwc.ContractType    
+                                    FROM dbo.M_LTP_WorkPlaces mlwp
+                                        INNER JOIN dbo.Locko_Workplace lw
+                                        ON lw.Id = mlwp.Child
+                                        INNER JOIN dbo.Locko_WorkContract lwc
+                                        ON lwc.Id = lw.WorkContractType
+                                    WHERE mlwp.Parent = locko_tran1_.id
+                                        --AND lw.WorkContractType = 2
+                                    ORDER BY lw.MainWorkplaceFlag DESC, lw.Id -- Основное место работы вперед 
+                                ) 
+                                            
+        FROM
+            #L_Application lat
+            INNER JOIN dbo.v_Locko_TransactionParticipants             AS locko_tran1_ WITH(NOEXPAND)
+            ON lat.Id = locko_tran1_.[Application]
+            LEFT JOIN Locko_ClientCategory                  AS locko_ctct0_ 
+                ON locko_tran1_.Category = locko_ctct0_.Id
+        WHERE
+            locko_tran1_.TransactionRole = 2 -- основной заёмщик
+    ),
+    main_data AS (
+        SELECT
+            --NUMBER = this_.R_N,
+            tmp_this_.[Rank],
+            [Application] = tmp_this_.Id,
+
+            TaskBase_Id = 
+                CASE
+                    WHEN w.Token
+                        IN( 1, -- 'MonitoringFraud'
+                            3, -- OddLotApprove
+                            4 -- PersonalConditionApprove
+                        ) THEN NULL -- возвращать NULL если есть такой токен
+                    ELSE -- иначе делаем проверки
+                        IIF(
+                            dbo.f_CheckTask(tb.ApplicationExecutorGroup, tb.Executor, tb.ShowToRemoteOffice, @current_user, tb.[Subject] ) != 0,
+                            tmp_this_.TaskBase_Id,
+                            NULL
+                        )
+                END,
+
+            WorkflowBookmark = tmp_this_.TaskBase_Id, --this_.TaskBase_WorkflowBookmark,
+
+            Assign = 
+                CASE 
+                    WHEN w.Token 
+                        IN( 2,  -- 'VerificationUnderwriting'
+                            1,  -- 'MonitoringFraud'
+                            5,  -- 'UWChecking'
+                            6   -- 'HeadUWAccept'
+                        ) THEN 0 -- если есть какой-то из этих токенов выводим 0
+                    ELSE 1
+                END,
+            this_.Branch,
+            BranchName = locko_brn0_.Name,
+            this_.CreationAuthor,                                               -- Менеджер
+            CreationFullName = usr0_.FullName,
+            this_.ApplicationNumber,                                            -- Номер
+            TrPr.TransactionRole,
+            TrPr.FullName,                                                      -- ФИО клиента
+
+            TrPr.ClientCategoryName,                                            -- Категория
+            TrPr.BusinessOwner,                                                 -- Собственнник бизнеса
+            this_.ApplicationStatus,                                            -- Статус
+            AppStatusName = locko_apps0_.Name,
+
+            tmp_this_.CreationDate,                                             --Дата поступления
+
+            Product = COALESCE(locko_decs2_.CreditType, this_.CreditType, locko_ProOp0_.Product), --this_.Product, --ISNULL(locko_decs2_.CreditType, locko_ProOp0_.Product),   --Программа
+            ProductName = locko_prd0_.Name, --ISNULL(locko_prd0_.Name, locko_prd1_.Name),
+
+            date_of_insert = tmp_this_.CreationDate,                            -- Дата создания
+
+            [Subject] = tb.[Subject],                                           -- Задача
+
+            Program = ISNULL(locko_decs2_.Program, locko_ProOp0_.Program),      --Тариф
+            ProgramName = ISNULL(locko_prg0_.Name, locko_prg1_.Name),           --Тариф
+
+            TrPr.Scoring,                                                      --Скорсегмент
+            TrPr.AFScoreSegment,                                               --Специализированный скорсегмент
+            
+            CollaterallOffer = TRY_CAST(
+                                    IIF(                                        --Наличие залога
+                                    @role = 1,
+                                    IIF(    EXISTS(
+                                                SELECT TOP(1) 1
+                                                FROM
+                                                    M_LDOA_Collaterals as M
+                                                    INNER JOIN Locko_CollateralsDSS as C
+                                                    ON C.Id=M.Child
+                                                WHERE
+                                                    M.Parent = locko_decs2_.id
+                                                    AND C.Type = '1'
+                                            ),
+                                            1,
+                                            0
+                                    ),
+                                    TrPr.CollaterallOffer
+                                    )
+                                AS bit),
+
+            this_.OddLot,                                                       -- Нестандартная сделка
+            this_.Region,                                                       -- Регион
+            RegionName = locko_brn1_.Name,
+            this_.ApprovalDate,                                                 -- Дата решения
+            this_.Validity,                                                     -- Срок действия
+            Executor = tb.Executor,                                             -- Исполнитель
+            ExecutorName = usr1_.FullName,
+            AmountRequested  = COALESCE(locko_decs2_.LoanAmount, this_.LoanAmountPreDecision, locko_ConAppI.AmountRequested),             -- Запрашиваемая сумма
+            ApplicationAmountRequested = locko_ConAppI.AmountRequested,
+            tb.ApplicationExecutorGroup
+        FROM
+            #L_Application                                          AS tmp_this_
+            INNER JOIN dbo.Locko_Application                        AS this_
+                ON this_.Id = tmp_this_.Id
+            LEFT JOIN Locko_TaskBase                                AS tb
+                ON tb.[Id] = tmp_this_.[TaskBase_Id]
+            LEFT JOIN TransactionParticipants                       AS TrPr
+                ON TrPr.[Application] = tmp_this_.Id
+            LEFT JOIN dbo.Locko_DecisionOnApplication               AS locko_decs2_
+                ON locko_decs2_.id = this_.SelectedDecisionOnApp
+            LEFT JOIN dbo.Locko_Program                             AS locko_prg0_
+                ON locko_decs2_.Program = locko_prg0_.Id
+            --LEFT JOIN dbo.Locko_Product                             AS locko_prd0_
+            --    ON locko_prd0_.Id = locko_decs2_.CreditType
+            LEFT JOIN dbo.Locko_ProductOption                       AS locko_ProOp0_
+                ON locko_ProOp0_.id = this_.SelectedProductsOption
+            LEFT JOIN dbo.Locko_Product                             AS locko_prd0_
+                ON locko_prd0_.Id = COALESCE(locko_decs2_.CreditType, this_.CreditType, locko_ProOp0_.Product)
+            --LEFT JOIN dbo.Locko_Product                             AS locko_prd1_
+            --    ON locko_ProOp0_.Product = locko_prd1_.Id
+            LEFT JOIN dbo.Locko_Program                             AS locko_prg1_
+                ON locko_ProOp0_.Program = locko_prg1_.Id
+            LEFT JOIN dbo.Locko_Branch                              AS locko_brn0_
+                ON this_.Branch = locko_brn0_.Id
+            LEFT JOIN dbo.[User]                                    AS usr0_
+                ON this_.CreationAuthor=usr0_.Id
+            LEFT JOIN dbo.Locko_ApplicationStatus                   AS locko_apps0_
+                ON this_.ApplicationStatus= locko_apps0_.Id
+            LEFT JOIN dbo.Locko_Branch                              AS locko_brn1_
+                ON this_.Region = locko_brn1_.Id
+            LEFT JOIN dbo.[User]                                    AS usr1_
+                ON tb.Executor = usr1_.Id
+            LEFT JOIN Locko_ConsumerApplicationInf                  AS locko_ConAppI
+                ON this_.AdditionalProperties = locko_ConAppI.Id
+            LEFT JOIN dbo.v_WorkflowBookmark_Token w WITH(NOEXPAND)
+                ON w.WorkflowBookmark = tb.WorkflowBookmark     
+                
+    )
+  
+    SELECT
+        --NUMBER = @from_index + NUMBER,
+        --total_count = @total_count,   -- сколько всего записей в наборе данных
+        --page_number = FLOOR( (CAST(@from_index AS float))/CAST(@count AS float) ),
+        --total_pages = @total_pages,   -- сколько всего страниц в наборе данных
+
+        m.[Application],
+        m.TaskBase_Id,   -- Если здесь не NULL то будет отображаться кнопка взять в работу
+        m.WorkflowBookmark,
+        m.Assign,
+
+        m.[Rank],
+        m.Branch,
+        m.BranchName,                                       -- Наименование отделения
+        m.CreationAuthor,                                   -- Менеджер
+        m.CreationFullName,                                 -- имя менеджера
+        m.ApplicationNumber,                                -- Номер
+        m.FullName,                                         -- ФИО клиента
+        m.ClientCategoryName,                               -- Категория
+        m.ApplicationStatus,                                -- Статус
+        m.AppStatusName,                                    -- Нименование статуса
+        m.CreationDate,                                     -- Дата поступления
+        m.Product,                                          -- Программа
+        m.ProductName,
+        m.date_of_insert,                                   -- Дата создания
+
+        --m.[Subject],                                      -- Задача
+        [Subject] =                                         -- Задача
+            CASE
+                WHEN  -- Не выводить ФИО исполнителя и название задачи, если (одновременно):
+                    (
+                        ISNULL(u.Executor_underwriter, 0) = 1 -- Исполнитель задачи входит в группу "Верификаторы и андеррайтеры"
+                        OR ISNULL(u2.Executor_underwriter_group, 0) = 1 -- ИЛИ Группа исполнителя входи (ApplicationExecutorGroup) в группу "Верификаторы и андеррайтеры" или равна ей
+                    )
+                    AND @current_user_underwriter = 0 -- Текущий пользователь не входит в группу "Верификаторы и андеррайтеры"
+                THEN
+                    NULL
+                ELSE
+                    m.[Subject]
+            END,
+
+        m.Program,                                          -- Тариф
+        m.ProgramName,
+        m.Scoring,                                          -- Скорсегмент
+        m.AFScoreSegment,                                   -- Специализированный скорсегмент
+        CollaterallOffer = ISNULL(m.CollaterallOffer,0),    -- Наличие залога
+        m.OddLot,                                           -- Нестандартная сделка
+        m.Region,                                           -- Регион
+        m.RegionName,                                       -- Наименование региона
+        m.ApprovalDate,                                     -- Дата решения
+        m.Validity,                                         -- Срок действия
+        m.Executor,                                         -- Исполнитель
+
+        --m.ExecutorName,                                   -- Наименование исполнителя
+        ExecutorName =                                      -- Наименование исполнителя
+            CASE
+                WHEN  -- Не выводить ФИО исполнителя и название задачи, если (одновременно):
+                    (
+                        ISNULL(u.Executor_underwriter, 0) = 1 -- Исполнитель задачи входит в группу "Верификаторы и андеррайтеры"
+                        OR ISNULL(u2.Executor_underwriter_group, 0) = 1 -- ИЛИ Группа исполнителя входи (ApplicationExecutorGroup) в группу "Верификаторы и андеррайтеры" или равна ей
+                    )
+                    AND @current_user_underwriter = 0 -- Текущий пользователь не входит в группу "Верификаторы и андеррайтеры"
+                THEN
+                    NULL
+                ELSE
+                    m.ExecutorName
+            END,
+        m.AmountRequested,                                  -- Запрашиваемая сумма
+        m.BusinessOwner,                                    -- Собственник бизнеса
+        m.ApplicationAmountRequested 
+    FROM
+        main_data m
+        OUTER APPLY (
+            SELECT TOP(1) Executor_underwriter = 1
+            FROM
+                dbo.UserSecuritySetCache AS ug
+                INNER JOIN #Locko_id_list as i
+                ON i.id=ug.GroupId
+                AND i.[type] = 99
+            WHERE
+                ug.UserId = m.Executor
+        ) AS u
+        OUTER APPLY (
+            SELECT TOP(1) Executor_underwriter_group = 1
+            FROM    #Locko_id_list as i
+            WHERE   i.[type] = 99
+                    AND i.id = m.ApplicationExecutorGroup
+        ) AS u2
+    ORDER BY
+        m.[Rank] DESC,
+        m.CreationDate DESC
+
+    RETURN 0;
+   
+END
+]]>
+      </text>
+    </procedure>
+
+    <procedure name="tvf_Locko_Application_History">
+      <mappings>
+        <hibernate-mapping xmlns="urn:nhibernate-mapping-2.2">
+          <sql-query name="Exectvf_Locko_Application_History">
+            <query-param name="person_name" type="System.String"/>
+            <query-param name="person_birth" type="System.DateTime"/>
+            <query-param name="passport_serie" type="System.String"/>
+            <query-param name="passport_number" type="System.String"/>
+            select * from Locko_Application_History(:person_name, :person_birth, :passport_serie, :passport_number)
+          </sql-query>
+        </hibernate-mapping>
+      </mappings>
+      <text>
+        <![CDATA[
+CREATE FUNCTION dbo.Locko_Application_History
+(
+    @person_name        nvarchar(250)   = NULL,         -- ФИО
+    @person_birth       datetime        = NULL,         -- дата рождения
+    @passport_serie     varchar(50)     = NULL,         -- серия паспорта
+    @passport_number    varchar(50)     = NULL         -- номер паспорта
+
+    -- для постраничного вывода
+    --@count              int             = 2147483646, -- сколько записей(заявок) нужно вывести 2147483647
+    --@from_index         int             = 0           -- сколько записей нужно пропустить, а потом выводить данные
+)
+RETURNS @RES TABLE
+(
+    Locko_DateTime                  datetime,       -- Дата заполнения заявки в формате 
+    Locko_ApplicationSource         nvarchar(100),  -- Источник
+    Locko_ApplicationNumber         nvarchar(max),  -- Номер заявки
+    Locko_ApplicationURL            nvarchar(1024), -- Ссылка на заявку
+    Locko_ProductName               nvarchar(max),  -- Продукт
+    Locko_RoleInDeal                nvarchar(max),  -- Роль в сделке
+    Locko_AmountRequested           float,          -- Запрашиваемая сумма
+    Locko_DeclaredIncome            float,          -- Заявленный доход
+    Locko_MainEmployer              nvarchar(max),  -- Основной работодатель
+    Locko_Position                  nvarchar(max),  -- Должность
+    Locko_ApplicationHistoryStatus  nvarchar(max),  -- Статус по заявке
+    Locko_RejectionReason           nvarchar(max)  -- Причина
+    --total_count                     int,
+    --total_pages                     int
+)
+AS
+BEGIN
+    
+    DECLARE @Application TABLE
+    (
+        [Application]           bigint          NOT NULL,
+        TransactionParticipant  bigint          NOT NULL,
+        TransactionRole         bigint          NOT NULL,
+        Locko_RoleInDeal        nvarchar(max)   NOT NULL,
+        FullName                nvarchar(250)   NULL
+        --total_count             int             NULL,
+        --total_pages             int             NULL,
+
+        PRIMARY KEY (TransactionParticipant, [Application])
+    )
+
+    -- проверки и установка значений по умолчанию
+    SELECT
+        --@count              = IIF(ISNULL(@count, 100)<=0, 100, ISNULL(@count, 100)),
+        --@from_index         = IIF(ISNULL(@from_index, 0)<0, 0, ISNULL(@from_index, 0)),
+        @person_name        = NULLIF(RTRIM(LTRIM(@person_name)), ''),                           -- ФИО
+        @person_birth       = CAST(@person_birth AS date),                                      -- дата рождения
+        @passport_serie     = NULLIF(REPLACE(RTRIM(LTRIM(@passport_serie)), ' ', ''), ''),      -- серия паспорта
+        @passport_number    = NULLIF(REPLACE(RTRIM(LTRIM(@passport_number)), ' ', ''), '')      -- номер паспорта
+
+    -- подравняем индекс
+    --SELECT @from_index = FLOOR( CAST(@from_index AS float) / CAST(@count AS float) ) * @count
+
+    --парсинг парметров
+    ;WITH person AS (
+        SELECT  [name], birth
+        FROM    (VALUES (@person_name, @person_birth)) AS t([name], birth)
+    ),
+    PreviousFullName AS (
+        -- тут определим, что у нас есть персоны которые меняли фамилию, просто добавим их
+        SELECT
+            FullName = LEFT(RTRIM(LTRIM(locko_full0_.FullName)), 250),
+            p.BirthDate
+        FROM    
+            dbo.v_Locko_TransactionParticipants     AS p WITH(NOEXPAND, NOLOCK)
+            INNER JOIN person                       AS pl WITH(NOLOCK)
+                ON p.BirthDate = pl.birth
+                AND CHARINDEX (pl.[name], p.FullName)>0
+            INNER JOIN dbo.Locko_FullName           AS locko_full0_ WITH(NOLOCK)
+                ON p.PreviousFullName = locko_full0_.Id
+        WHERE 
+            p.FullNameWasNotChanged = 0  -- значит менялась фамилия
+    ),
+    Locko_person([name], birth) AS (
+        SELECT [name], birth
+        FROM person WITH(NOLOCK)
+        
+        UNION 
+        SELECT N.FullName, N.BirthDate
+        FROM PreviousFullName AS N WITH(NOLOCK)
+    ),
+    passport AS (
+        SELECT  serie, number
+        FROM    (VALUES (@passport_serie, @passport_number)) AS t(serie, number)
+    ),
+    passports AS (
+        -- ищем предыдущий паспорт
+        SELECT
+            p.PreviousPassportSeries,
+            p.PreviousPassportNumber
+        FROM    
+            dbo.v_Locko_TransactionParticipants AS p WITH(NOEXPAND, NOLOCK)
+            INNER JOIN passport AS pl WITH(NOLOCK)
+                ON p.PassportSeries = pl.serie
+                AND p.PassportNumber = pl.number
+        WHERE
+            LTRIM(RTRIM(ISNULL(p.PreviousPassportSeries, '')))<>''
+            AND LTRIM(RTRIM(ISNULL(p.PreviousPassportNumber, '')))<>''
+    ),
+    Locko_passport(serie, number) AS (
+        SELECT serie, number
+        FROM passport WITH(NOLOCK)
+
+        UNION
+        SELECT p.PreviousPassportSeries, p.PreviousPassportNumber
+        FROM passports AS p WITH(NOLOCK)
+    ),
+    L_Application AS ( /* собственно поиск заявок */
+        -- найдем заявки по ФИО и дате рождения
+        SELECT
+            p.[Application],
+            p.id,
+            p.TransactionRole,
+            Locko_RoleInDeal = t.Name, -- Из справочника «Роль в сделке» -> TransactionRole - Name
+            FullName = LEFT(RTRIM(LTRIM(p.FullName)), 250)
+        FROM    
+            dbo.v_Locko_TransactionParticipants AS p WITH(NOEXPAND, NOLOCK)
+            INNER JOIN [dbo].[TransactionRole] AS t WITH(NOLOCK)
+                ON p.TransactionRole = t.Id
+            INNER JOIN Locko_person AS pl WITH(NOLOCK)
+                ON p.BirthDate = pl.birth
+                AND CHARINDEX (pl.name, p.FullName)>0
+    )
+    INSERT INTO @Application
+    (
+        [Application],
+        TransactionParticipant,
+        TransactionRole,
+        Locko_RoleInDeal,
+        FullName
+        --total_count,
+        --total_pages
+    )
+    SELECT TOP(1) WITH TIES
+        p.[Application],
+        p.id,
+        p.TransactionRole,
+        p.Locko_RoleInDeal,
+        p.FullName
+
+        -- общее кол-во найденных строк
+        --total_count = COUNT(1) OVER (PARTITION BY 1),
+        --total_pages = CEILING((COUNT(1) OVER (PARTITION BY 1)) * 1.0 / @count*1.0)
+    FROM
+        L_Application AS p WITH(NOLOCK)
+    ORDER BY 
+        ROW_NUMBER() OVER ( PARTITION BY p.id, p.[Application] ORDER BY p.TransactionRole) -- id = 2    "Основной заемщик" самое маленькое поэтому будет выводится это.
+
+
+    /*результирующий вывод данных*/
+    ;WITH WorkPlaces AS (
+        SELECT
+            TransactionParticipant = m.Parent,
+            w.ShortName,
+            w.WorkplacePosition
+        FROM
+            M_LTP_WorkPlaces AS m WITH(NOLOCK)
+            INNER JOIN Locko_Workplace as w WITH(NOLOCK)
+            ON m.Child = w.Id
+            AND w.MainWorkplaceFlag = 1
+    )
+    INSERT INTO @RES
+    (
+        Locko_DateTime,                   -- Дата заполнения заявки в формате 
+        Locko_ApplicationSource,          -- Источник
+        Locko_ApplicationNumber,          -- Номер заявки
+        Locko_ApplicationURL,             -- Ссылка на заявку
+        Locko_ProductName,                -- Продукт
+        Locko_RoleInDeal,                 -- Роль в сделке
+        Locko_AmountRequested,            -- Запрашиваемая сумма
+        Locko_DeclaredIncome,             -- Заявленный доход
+        Locko_MainEmployer,               -- Основной работодатель
+        Locko_Position,                   -- Должность
+        Locko_ApplicationHistoryStatus,   -- Статус по заявке
+        Locko_RejectionReason             -- Причина
+        --total_count,
+        --total_pages
+    )
+    SELECT 
+        Locko_DateTime                  = CAST(CAST(ISNULL(this_.DateOfCompletion, this_.CreationDate) AS date) AS datetime),   -- Дата заполнения заявки в формате 
+        Locko_ApplicationSource         = CAST('ELMA' as nvarchar(100)),                                                        -- Источник
+        Locko_ApplicationNumber         = this_.ApplicationNumber,                                                              -- Номер заявки
+        Locko_ApplicationURL            = CAST(CONCAT('/Common/Catalogs/ViewItem/', this_.Id, '?uid=4ba4f2f6-bff3-41ca-b3be-56261afc2219') AS nvarchar(1024)),  -- Ссылка на заявку
+        Locko_ProductName               = ISNULL(locko_prd0_.Name, locko_prd1_.Name),                                           -- Продукт
+        p.Locko_RoleInDeal,                                                                                                     -- Роль в сделке
+        Locko_AmountRequested           = COALESCE(locko_decs2_.LoanAmount, this_.LoanAmountPreDecision, locko_ConAppI.AmountRequested),-- Запрашиваемая сумма
+        Locko_DeclaredIncome            = this_.Income,                                                                         -- Заявленный доход
+        Locko_MainEmployer              = w.ShortName,                                                                          -- Основной работодатель
+        Locko_Position                  = w.WorkplacePosition,                                                                  -- Должность
+        Locko_ApplicationHistoryStatus  = locko_apps0_.Name,                                                                    -- Статус по заявке
+        Locko_RejectionReason           = NULLIF(RTRIM(r.Reason), '')                                                           -- Причина
+
+        --p.total_count,
+        --p.total_pages
+        --,this_.RiskRejectionReasonCode
+        --,FullName
+    FROM 
+        @Application                                            AS p
+        INNER JOIN dbo.Locko_Application                        AS this_ WITH(NOLOCK)
+            ON p.[Application] = this_.Id
+        LEFT JOIN dbo.Locko_DecisionOnApplication               AS locko_decs2_ WITH(NOLOCK)
+            ON locko_decs2_.id = this_.SelectedDecisionOnApp
+        LEFT JOIN dbo.Locko_Product                             AS locko_prd0_ WITH(NOLOCK)
+            ON locko_prd0_.Id = locko_decs2_.CreditType
+        LEFT JOIN dbo.Locko_ProductOption                       AS locko_ProOp0_ WITH(NOLOCK)
+            ON locko_ProOp0_.id = this_.SelectedProductsOption
+        LEFT JOIN dbo.Locko_Product                             AS locko_prd1_ WITH(NOLOCK)
+            ON locko_ProOp0_.Product = locko_prd1_.Id
+        LEFT JOIN WorkPlaces                                    AS w WITH(NOLOCK)
+            ON w.TransactionParticipant = p.TransactionParticipant
+        LEFT JOIN dbo.Locko_ApplicationStatus                   AS locko_apps0_ WITH(NOLOCK)
+            ON this_.ApplicationStatus= locko_apps0_.Id
+        LEFT JOIN Locko_ConsumerApplicationInf                  AS locko_ConAppI WITH(NOLOCK)
+            ON this_.AdditionalProperties = locko_ConAppI.Id
+        OUTER APPLY
+        (
+            SELECT
+                Reason = CAST('<d>' + Reason + '</d>' AS xml).value('(//*)[1]', 'varchar(max)')
+            FROM
+                (
+                    SELECT
+                        CONCAT(
+                            IIF( (ROW_NUMBER() OVER (ORDER BY r.[Name] ))=1, '', '<br>' + CHAR(13) + CHAR(10) ),
+                            ISNULL(r.[Name], '')
+                        )
+                    FROM
+                    (
+                        SELECT
+                            ISNULL(RTRIM(LTRIM(r.[Name])), '')
+                        FROM
+                            M_LA_DecisionReasonList AS map WITH(NOLOCK)
+                            INNER JOIN Locko_DecisionReason as r WITH(NOLOCK)
+                                ON map.Child = r.Id
+                        WHERE
+                            map.Parent = p.[Application]
+                            AND r.Decision=1
+                    
+                        UNION
+                        SELECT
+                            ISNULL(RTRIM(LTRIM(r.[Name])), '')
+                        FROM
+                            Locko_DecisionReason as r WITH(NOLOCK)
+                        WHERE
+                            --r.DeclineCode = TRY_CAST(this_.RiskRejectionReasonCode AS bigint)
+                            r.DssId = TRY_CAST(this_.RiskRejectionReasonCode AS bigint)
+                    ) AS r([Name])
+                    ORDER BY r.[Name]
+                    FOR XML PATH('')
+                ) as t(Reason)
+        ) AS r(Reason)
+
+    ORDER BY 
+        this_.CreationDate DESC
+        --OFFSET @from_index ROWS
+        --FETCH NEXT @count ROWS ONLY
+
+    RETURN
+END
+          ]]>
+      </text>
+    </procedure>
+
+  </procedures>
+
+  <views>
+    
+    <view name="v_Locko_TransactionParticipants">
+      <text>
+        <![CDATA[
+    CREATE VIEW dbo.v_Locko_TransactionParticipants
+    WITH SCHEMABINDING AS
+    SELECT 
+        locko_tran1_.id,
+        [Application] = transactio0_.Parent,
+        locko_tran1_.Scoring,
+        locko_tran1_.AFScoreSegment,
+        locko_tran1_.TransactionRole,
+        BirthDate               = CAST(locko_tran1_.BirthDate AS date),
+        PassportSeries          = CAST(REPLACE(locko_tran1_.PassportSeries,' ', '') AS nvarchar(50)),
+        PassportNumber          = CAST(REPLACE(locko_tran1_.PassportNumber,' ', '') AS nvarchar(50)),
+        PreviousPassportSeries  = CAST(REPLACE(locko_tran1_.PreviousPassportSeries,' ', '') AS nvarchar(50)),
+        PreviousPassportNumber  = CAST(REPLACE(locko_tran1_.PreviousPassportNumber,' ', '') AS nvarchar(50)),
+        FullName                = CAST(RTRIM(LTRIM(locko_full0_.FullName)) AS nvarchar(300)),
+        locko_tran1_.Category,
+        locko_tran1_.PreviousFullName,
+        locko_tran1_.FullNameWasNotChanged
+    FROM
+        dbo.M_LA_TransactionParticipants                AS transactio0_ 
+        INNER JOIN dbo.Locko_TransactionParticipant     AS locko_tran1_
+            ON transactio0_.Child=locko_tran1_.Id 
+        INNER JOIN dbo.Locko_FullName                    AS locko_full0_ 
+            ON locko_tran1_.FullName = locko_full0_.Id
+    --WHERE -- пункты по номерам строк в таблице
+    --    locko_tran1_.TransactionRole = 2 --@transaction_role -- основной заёмщик
+        ]]>
+      </text>
+    </view>
+
+    <view name="v_WorkflowBookmark_Token">
+      <text>
+        <![CDATA[
+CREATE VIEW dbo.v_WorkflowBookmark_Token
+WITH SCHEMABINDING AS
+    SELECT
+        WorkflowBookmark = workflowbo0_.Id,
+        CAST(
+            CASE processhd0_.Token
+                WHEN 'MonitoringFraud'          THEN 1
+                WHEN 'VerificationUnderwriting' THEN 2
+                WHEN 'OddLotApprove'            THEN 3
+                WHEN 'PersonalConditionApprove' THEN 4
+                WHEN 'UWChecking'               THEN 5
+                WHEN 'HeadUWAccept'             THEN 6
+            END
+            AS tinyint
+        ) AS Token,
+        cnt = COUNT_BIG(*)
+    FROM
+        dbo.WorkflowBookmark                                AS workflowbo0_ 
+        INNER JOIN dbo.WorkflowInstance                     AS workflowin0_ 
+            ON workflowbo0_.Instance = workflowin0_.Id
+        INNER JOIN dbo.WorkflowProcess                      AS workflowpr0_
+            ON workflowin0_.Process = workflowpr0_.Id
+        INNER JOIN dbo.ProcessHeader                        AS processhd0_
+            ON workflowpr0_.[Header]=processhd0_.Id
+    WHERE
+        processhd0_.Token in(
+            'MonitoringFraud', -- отберем только такие процессы
+            'VerificationUnderwriting',
+            'OddLotApprove',
+            'PersonalConditionApprove',
+            'UWChecking',
+            'HeadUWAccept'
+        )
+    GROUP BY 
+        workflowbo0_.Id,
+        processhd0_.Token
+        ]]>
+      </text>
+    </view>
+
+    <view name="v_MainBorrowerPhones">
+      <text>
+        <![CDATA[
+CREATE VIEW dbo.v_MainBorrowerPhones
+WITH SCHEMABINDING AS
+SELECT  
+    [Application] = m.Parent,
+    FormatedPhoneString = CAST( LEFT(p.FormatedPhoneString, 50) AS varchar(50) ),
+    cnt = COUNT_BIG(*)
+FROM
+    dbo.M_LA_MainBorrowerPhones as m
+    INNER JOIN [dbo].[Phone] AS p
+    ON p.Id = m.Child
+GROUP BY 
+    m.Parent,
+    CAST( LEFT(p.FormatedPhoneString, 50) AS varchar(50) )
+        ]]>
+      </text>
+    </view>
+    
+    <view name="v_MobilePhone">
+      <text>
+        <![CDATA[
+CREATE VIEW dbo.v_MobilePhone
+WITH SCHEMABINDING AS
+SELECT 
+    Participant_id = m.Parent,
+    FormatedPhoneString = CAST( LEFT(p.FormatedPhoneString, 50) AS varchar(50) ),
+    cnt = COUNT_BIG(*)
+FROM
+    dbo.M_LTP_MobilePhone AS m
+    INNER JOIN [dbo].[Phone] AS p
+    ON p.Id = m.Child
+GROUP BY 
+    m.Parent,
+    CAST( LEFT(p.FormatedPhoneString, 50) AS varchar(50) )
+        ]]>
+      </text>
+    </view>
+
+    <view name="v_WorkPhone">
+      <text>
+        <![CDATA[
+CREATE VIEW dbo.v_WorkPhone
+WITH SCHEMABINDING AS
+SELECT 
+    Participant_id = m.Parent,
+    FormatedPhoneString = CAST( LEFT(p.FormatedPhoneString, 50) AS varchar(50) ),
+    cnt = COUNT_BIG(*)
+FROM 
+    dbo.M_LTP_WorkPhone m
+    INNER JOIN [dbo].[Phone] AS p
+    ON p.Id = m.Child
+GROUP BY 
+    m.Parent,
+    CAST( LEFT(p.FormatedPhoneString, 50) AS varchar(50) )
+        ]]>
+      </text>
+    </view>
+
+    <view name="v_HomePhone">
+      <text>
+        <![CDATA[
+CREATE VIEW dbo.v_HomePhone
+WITH SCHEMABINDING AS
+SELECT 
+    Participant_id = m.Parent,
+    FormatedPhoneString = CAST( LEFT(p.FormatedPhoneString, 50) AS varchar(50) ),
+    cnt = COUNT_BIG(*)
+FROM
+    dbo.M_LTP_HomePhone m
+    INNER JOIN [dbo].[Phone] AS p
+    ON p.Id = m.Child
+GROUP BY 
+    m.Parent,
+    CAST( LEFT(p.FormatedPhoneString, 50) AS varchar(50) )
+        ]]>
+      </text>
+    </view>
+
+    <view name="v_RegPlacePhone">
+      <text>
+        <![CDATA[
+CREATE VIEW dbo.v_RegPlacePhone
+WITH SCHEMABINDING AS
+SELECT 
+    Participant_id = m.Parent,
+    FormatedPhoneString = CAST( LEFT(p.FormatedPhoneString, 50) AS varchar(50) ),
+    cnt = COUNT_BIG(*)
+FROM
+    dbo.M_LTP_RegPlacePhone m
+    INNER JOIN [dbo].[Phone] AS p
+    ON p.Id = m.Child
+GROUP BY 
+    m.Parent,
+    CAST( LEFT(p.FormatedPhoneString, 50) AS varchar(50) )
+        ]]>
+      </text>
+    </view>
+
+    <view name="v_Locko_Application_UTM_labels">
+      <text>
+        <![CDATA[
+CREATE VIEW dbo.v_Locko_Application_UTM_labels
+WITH SCHEMABINDING AS
+    SELECT 
+        [Application] = L.Id,
+        UTM_id = utm.id,
+        NameUTM = CAST(RTRIM(LTRIM(utm.NameUTM)) AS varchar(max))
+    FROM 
+        [dbo].[Locko_UTM] AS utm
+        INNER JOIN [dbo].[M_Locko_Service_Locko_UTM] AS m
+        ON m.Child = utm.id
+        INNER JOIN [dbo].[Locko_Application] AS L
+        ON m.Parent = L.Locko_ShortWebAppServiceInfo
+    WHERE 
+        utm.CodeUTM != 'utm_content'
+        ]]>
+      </text>
+    </view>
+  
+  </views>
+  
+  <scripts>
+    
+    <script name="ApplicationNumeratorSequence">
+      <text>
+        CREATE SEQUENCE ApplicationNumeratorSeq
+        AS bigint
+        START WITH 2177
+        INCREMENT BY 1
+      </text>
+    </script>
+
+    <!-- Скрипты на навешивание индексов на обычные таблицы -->
+    <script name="IX_TaskBaseESN" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+    CREATE NONCLUSTERED INDEX [IX_TaskBaseESN] ON [dbo].[TaskBase]
+    (
+        [Executor],
+        [Status],
+        [NotShowInLists]
+    )
+    INCLUDE (   
+        Application,
+        ApplicationExecutorGroup
+    ) 
+    WITH (DROP_EXISTING = OFF, ONLINE = ON)
+        ]]>
+      </text>
+    </script>
+
+    <script name="IX___TaskBase___Executor" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+    CREATE NONCLUSTERED INDEX [IX___TaskBase___Executor] ON [dbo].[TaskBase]
+    (
+        [Executor]
+    )
+    INCLUDE
+    (
+        [Subject],
+        CreationDate,
+        [Status],
+        WorkflowBookmark,
+        [Application],
+        ApplicationExecutorGroup,
+        ShowToRemoteOffice
+    )
+    WITH (DROP_EXISTING = OFF, ONLINE = ON)
+        ]]>
+      </text>
+    </script>
+    
+    <script name="IX_Locko_Property_TransactionParticipant" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+    CREATE NONCLUSTERED INDEX [IX_Locko_Property_TransactionParticipant] ON [dbo].[Locko_Property]
+    (
+        [TransactionParticipant] ASC
+    )
+    INCLUDE
+    (
+        PledgeAsCollateralAdmissible
+    )
+    WITH (DROP_EXISTING = OFF, ONLINE = ON)
+        ]]>
+      </text>
+    </script>
+    
+    <script name="IX_TaskBase_ApplicationExecutorGroup_Status" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+    CREATE NONCLUSTERED INDEX [IX_TaskBase_ApplicationExecutorGroup_Status] 
+        ON [TaskBase]
+        (   
+            [Status]
+        )
+        INCLUDE
+        (
+            id,
+            [ApplicationExecutorGroup],
+            WorkflowBookmark,
+            [Application],
+            [Executor],
+            [IsEmulation],
+            [Subject],
+            CreationDate,
+            ShowToRemoteOffice
+        )
+        WITH (DROP_EXISTING = OFF, ONLINE = ON)
+        ]]>
+      </text>
+    </script>
+
+    <script name="IX_TaskBase_ApplicationExecutorGroup" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+    CREATE NONCLUSTERED INDEX [IX_TaskBase_ApplicationExecutorGroup] 
+    ON [TaskBase]
+    (
+        [ApplicationExecutorGroup] ASC
+    )
+    INCLUDE
+    (
+        id,
+        Subject,
+        Executor,
+        Status,
+        WorkflowBookmark,
+        Application
+    )
+    WITH (DROP_EXISTING = OFF, ONLINE = ON)
+        ]]>
+      </text>
+    </script>
+
+    <script name="IX_Locko_Property__TransactionParticipant" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+    CREATE NONCLUSTERED INDEX [IX_Locko_Property__TransactionParticipant]
+    ON [Locko_Property]
+    (
+        [TransactionParticipant]
+    )
+    WHERE
+        PledgeAsCollaterallOffer=1
+    WITH (DROP_EXISTING = OFF, ONLINE = ON)
+        ]]>
+      </text>
+    </script>
+
+    <script name="IX_Locko_Application__Branch__in" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+    CREATE NONCLUSTERED INDEX [IX_Locko_Application__Branch__in] 
+        ON [Locko_Application]
+        (
+            Branch
+        )
+        INCLUDE
+        (
+            [DateOfCompletion],
+            Id,
+            ApplicationRank,
+            CreationAuthor,
+            ApplicationNumber,
+            ApplicationStatus,
+            CreationDate,
+            OddLot,
+            Region,
+            ApprovalDate,
+            Validity,
+            LoanAmountPreDecision,
+            AgreedDecision,
+            SelectedDecisionOnApp,
+            SelectedProductsOption,
+            AdditionalProperties,
+            IncomingChannel
+        )
+        WITH(DROP_EXISTING = OFF, ONLINE = ON)
+        ]]>
+      </text>
+    </script>
+    
+    <script name="ix_Locko_TransactionParticipant_TransactionRole" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+    CREATE NONCLUSTERED INDEX [ix_Locko_TransactionParticipant_TransactionRole]
+    ON dbo.Locko_TransactionParticipant(Id)
+    INCLUDE(
+        TransactionRole,
+        FullName,
+        BirthDate,
+        PassportSeries,
+        PassportNumber,
+        Category,
+        Scoring,
+        AFScoreSegment
+    )
+    WHERE TransactionRole = 2
+    WITH (DROP_EXISTING = OFF, ONLINE = ON)
+        ]]>
+      </text>
+    </script>
+    
+    <script name="M_LA_TransactionParticipants_remove" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+          DECLARE 
+    @s nvarchar(max) = ''
+
+SELECT
+    @s = CONCAT(@s, 'DROP INDEX ', QUOTENAME ( name, '[]'), ' ON [M_LA_TransactionParticipants];', CHAR(13), CHAR(10) )
+FROM 
+    sys.indexes 
+WHERE
+    object_id=OBJECT_ID(N'[M_LA_TransactionParticipants]')
+    AND name IS NOT NULL
+
+EXEC(@s)
+        ]]>
+      </text>
+    </script>
+
+    <script name="ix_M_LA_TransactionParticipants_Child" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+CREATE UNIQUE CLUSTERED INDEX [ix_M_LA_TransactionParticipants_Child]
+ON [M_LA_TransactionParticipants] ([Child], [Parent])
+WITH (IGNORE_DUP_KEY = ON)
+        ]]>
+      </text>
+    </script>
+
+    <script name="ix_M_LA_TransactionParticipants_Parent" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+CREATE NONCLUSTERED INDEX [ix_M_LA_TransactionParticipants_Parent]
+ON [M_LA_TransactionParticipants] ([Parent])
+INCLUDE ([Child])
+        ]]>
+      </text>
+    </script>
+
+    <script name="M_LDOA_Collaterals_remove" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+          DECLARE 
+    @s nvarchar(max) = ''
+
+SELECT
+    @s = CONCAT(@s, 'DROP INDEX ', QUOTENAME ( name, '[]'), ' ON [dbo].[M_LDOA_Collaterals];', CHAR(13), CHAR(10) )
+FROM 
+    sys.indexes 
+WHERE
+    object_id=OBJECT_ID(N'[dbo].[M_LDOA_Collaterals]')
+    AND name IS NOT NULL
+
+EXEC(@s)
+        ]]>
+      </text>
+    </script>
+
+    <script name="ix_M_LDOA_Collaterals_Child" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+CREATE UNIQUE CLUSTERED INDEX [ix_M_LDOA_Collaterals_Child]
+ON [dbo].[M_LDOA_Collaterals] ([Child], [Parent])
+WITH (IGNORE_DUP_KEY = ON)
+        ]]>
+      </text>
+    </script>
+
+    <script name="ix_M_LDOA_Collaterals_Parent" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+CREATE NONCLUSTERED INDEX [ix_M_LDOA_Collaterals_Parent]
+ON [dbo].[M_LDOA_Collaterals] ([Parent])
+INCLUDE ([Child])
+        ]]>
+      </text>
+    </script>
+
+    <script name="M_LA_MainBorrowerPhones_remove" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+          DECLARE 
+    @s nvarchar(max) = ''
+
+SELECT
+    @s = CONCAT(@s, 'DROP INDEX ', QUOTENAME ( name, '[]'), ' ON [dbo].[M_LA_MainBorrowerPhones];', CHAR(13), CHAR(10) )
+FROM 
+    sys.indexes 
+WHERE
+    object_id=OBJECT_ID(N'[dbo].[M_LA_MainBorrowerPhones]')
+    AND name IS NOT NULL
+
+EXEC(@s)
+        ]]>
+      </text>
+    </script>
+
+    <script name="ix___M_LA_MainBorrowerPhones___Child" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+CREATE UNIQUE CLUSTERED INDEX [ix___M_LA_MainBorrowerPhones___Child]
+ON [dbo].[M_LA_MainBorrowerPhones] ([Child], [Parent])
+WITH (IGNORE_DUP_KEY = ON)
+        ]]>
+      </text>
+    </script>
+
+    <script name="ix___M_LA_MainBorrowerPhones___Parent" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+CREATE NONCLUSTERED INDEX [ix___M_LA_MainBorrowerPhones___Parent]
+ON [dbo].[M_LA_MainBorrowerPhones] ([Parent])
+INCLUDE ([Child])
+        ]]>
+      </text>
+    </script>
+
+    <script name="M_LTP_WorkPhone_remove" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+DECLARE 
+    @s nvarchar(max) = ''
+
+SELECT
+    @s = CONCAT(@s, 'DROP INDEX ', QUOTENAME ( name, '[]'), ' ON [dbo].[M_LTP_WorkPhone];', CHAR(13), CHAR(10) )
+FROM 
+    sys.indexes 
+WHERE
+    object_id=OBJECT_ID(N'[dbo].[M_LTP_WorkPhone]')
+    AND name IS NOT NULL
+
+EXEC(@s)
+        ]]>
+      </text>
+    </script>
+
+    <script name="ix___M_LTP_WorkPhone___Child" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+CREATE UNIQUE CLUSTERED INDEX [ix___M_LTP_WorkPhone___Child]
+ON [dbo].[M_LTP_WorkPhone] ([Child], [Parent])
+WITH (IGNORE_DUP_KEY = ON)
+        ]]>
+      </text>
+    </script>
+
+    <script name="ix___M_LTP_WorkPhone___Parent" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+CREATE NONCLUSTERED INDEX [ix___M_LTP_WorkPhone___Parent]
+ON [dbo].[M_LTP_WorkPhone] ([Parent])
+INCLUDE ([Child])
+        ]]>
+      </text>
+    </script>
+
+    <script name="M_LTP_HomePhone_remove" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+DECLARE 
+    @s nvarchar(max) = ''
+
+SELECT
+    @s = CONCAT(@s, 'DROP INDEX ', QUOTENAME ( name, '[]'), ' ON [dbo].[M_LTP_HomePhone];', CHAR(13), CHAR(10) )
+FROM 
+    sys.indexes 
+WHERE
+    object_id=OBJECT_ID(N'[dbo].[M_LTP_HomePhone]')
+    AND name IS NOT NULL
+
+EXEC(@s)
+        ]]>
+      </text>
+    </script>
+
+    <script name="ix___M_LTP_HomePhone___Child" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+CREATE UNIQUE CLUSTERED INDEX [ix___M_LTP_HomePhone___Child]
+ON [dbo].[M_LTP_HomePhone] ([Child], [Parent])
+WITH (IGNORE_DUP_KEY = ON)
+        ]]>
+      </text>
+    </script>
+
+    <script name="ix___M_LTP_HomePhone___Parent" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+CREATE NONCLUSTERED INDEX [ix___M_LTP_HomePhone___Parent]
+ON [dbo].[M_LTP_HomePhone] ([Parent])
+INCLUDE ([Child])
+        ]]>
+      </text>
+    </script>
+
+    <script name="M_LTP_RegPlacePhone_remove" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+DECLARE 
+    @s nvarchar(max) = ''
+
+SELECT
+    @s = CONCAT(@s, 'DROP INDEX ', QUOTENAME ( name, '[]'), ' ON [dbo].[M_LTP_RegPlacePhone];', CHAR(13), CHAR(10) )
+FROM 
+    sys.indexes 
+WHERE
+    object_id=OBJECT_ID(N'[dbo].[M_LTP_RegPlacePhone]')
+    AND name IS NOT NULL
+
+EXEC(@s)
+        ]]>
+      </text>
+    </script>
+
+    <script name="ix___M_LTP_RegPlacePhone___Child" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+CREATE UNIQUE CLUSTERED INDEX [ix___M_LTP_RegPlacePhone___Child]
+ON [dbo].[M_LTP_RegPlacePhone] ([Child], [Parent])
+WITH (IGNORE_DUP_KEY = ON)
+        ]]>
+      </text>
+    </script>
+
+    <script name="ix___M_LTP_RegPlacePhone___Parent" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+CREATE NONCLUSTERED INDEX [ix___M_LTP_RegPlacePhone___Parent]
+ON [dbo].[M_LTP_RegPlacePhone] ([Parent])
+INCLUDE ([Child])
+        ]]>
+      </text>
+    </script>
+
+    <script name="UserGroup_Groups_Map_remove" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+DECLARE 
+    @s nvarchar(max) = ''
+
+SELECT
+    @s = CONCAT(@s, 'DROP INDEX ', QUOTENAME ( name, '[]'), ' ON [dbo].[UserGroup_Groups_Map];', CHAR(13), CHAR(10) )
+FROM 
+    sys.indexes 
+WHERE
+    object_id=OBJECT_ID(N'[dbo].[UserGroup_Groups_Map]')
+    AND name IS NOT NULL
+
+EXEC(@s)
+        ]]>
+      </text>
+    </script>
+
+    <script name="ix___UserGroup_Groups_Map___Child" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+CREATE UNIQUE CLUSTERED INDEX [ix___UserGroup_Groups_Map___Child]
+ON [dbo].[UserGroup_Groups_Map] ([ChildId], [ParentId])
+WITH (IGNORE_DUP_KEY = ON)
+        ]]>
+      </text>
+    </script>
+
+    <script name="ix___UserGroup_Groups_Map___Parent" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+CREATE NONCLUSTERED INDEX [ix___UserGroup_Groups_Map___Parent]
+ON [dbo].[UserGroup_Groups_Map] ([ParentId])
+INCLUDE ([ChildId])
+        ]]>
+      </text>
+    </script>
+
+    <script name="M_LTP_WorkPlacesIndexes_Remove" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+DECLARE 
+    @s nvarchar(max) = ''
+
+SELECT
+    @s = CONCAT(@s, 'DROP INDEX ', QUOTENAME ( name, '[]'), ' ON [dbo].[M_LTP_WorkPlaces];', CHAR(13), CHAR(10) )
+FROM 
+    sys.indexes 
+WHERE
+    object_id=OBJECT_ID(N'[dbo].[M_LTP_WorkPlaces]')
+    AND name IS NOT NULL
+
+EXEC(@s)
+        ]]>
+      </text>
+    </script>
+
+    <script name="ix___M_LTP_WorkPlaces___Parent" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+CREATE UNIQUE CLUSTERED INDEX [ix___M_LTP_WorkPlaces___Parent]
+ON [dbo].[M_LTP_WorkPlaces] (Parent, Child)
+WITH (IGNORE_DUP_KEY = ON)
+        ]]>
+      </text>
+    </script>
+
+    <script name="ix___M_LTP_WorkPlaces___Child" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+CREATE NONCLUSTERED INDEX [ix___M_LTP_WorkPlaces___Child]
+ON [dbo].[M_LTP_WorkPlaces] (Child)
+INCLUDE (Parent)
+        ]]>
+      </text>
+    </script>
+
+    <script name="M_LA_DecisionReasonList_Remove" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+DECLARE 
+    @s nvarchar(max) = ''
+
+SELECT
+    @s = CONCAT(@s, 'DROP INDEX ', QUOTENAME ( name, '[]'), ' ON [dbo].[M_LA_DecisionReasonList];', CHAR(13), CHAR(10) )
+FROM 
+    sys.indexes 
+WHERE
+    object_id=OBJECT_ID(N'[dbo].[M_LA_DecisionReasonList]')
+    AND name IS NOT NULL
+
+EXEC(@s)
+        ]]>
+      </text>
+    </script>
+
+    <script name="ix___M_LA_DecisionReasonList___Parent" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+CREATE UNIQUE CLUSTERED INDEX [ix___M_LA_DecisionReasonList___Parent]
+ON [dbo].[M_LA_DecisionReasonList] (Parent, Child)
+WITH (IGNORE_DUP_KEY = ON)
+        ]]>
+      </text>
+    </script>
+
+    <script name="ix___M_LA_DecisionReasonList___Child" ExecuteTime="OnIndexesCreated" AlwaysExecute="true">
+      <text>
+        <![CDATA[
+CREATE NONCLUSTERED INDEX [ix___M_LA_DecisionReasonList___Child]
+ON [dbo].[M_LA_DecisionReasonList] (Child)
+INCLUDE (Parent)
+        ]]>
+      </text>
+    </script>
+
+  </scripts>
+
+</root>
