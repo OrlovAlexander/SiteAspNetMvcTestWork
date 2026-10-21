@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Связи форм и вьюх Locko</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 13px/1.45 "Segoe UI", sans-serif; color: #1c1c1c; background: #f4f4f2; }
+h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+.wrap { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.muted, .dim { color: #5c5c5c; }
+.muted { margin: 0; max-width: 920px; }
+.stats { display: flex; gap: 28px; flex-wrap: wrap; }
+.stat b { display: block; font-size: 20px; font-weight: 600; }
+.stat span { color: #5c5c5c; font-size: 12px; }
+.controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+input[type="search"] { min-width: 340px; padding: 7px 10px; border: 1px solid #ccc; border-radius: 6px; font: inherit; }
+.pill, .btn { border: 1px solid #ccc; background: #fff; border-radius: 999px; padding: 4px 10px; cursor: pointer; font: inherit; }
+.btn { border-radius: 6px; }
+.btn.primary { background: #2f6fad; color: #fff; border-color: #2f6fad; }
+.pill.active { background: #e7f0fa; border-color: #2f6fad; color: #1d4e80; }
+.spacer { flex: 1; }
+.results { border: 1px solid #ddd; border-radius: 6px; background: #fafafa; max-height: 200px; overflow: auto; max-width: 720px; }
+.hit { display: flex; gap: 8px; padding: 5px 10px; cursor: pointer; border-bottom: 1px solid #eee; align-items: center; }
+.hit:hover { background: #eef4fb; }
+.kind { font-size: 9px; border: 1px solid #ccc; border-radius: 8px; padding: 0 6px; color: #666; white-space: nowrap; }
+.mono { font-family: Consolas, ui-monospace, monospace; font-size: 12px; }
+.grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.callout { background: #eef3f8; border-radius: 6px; padding: 10px 12px; font-size: 12.5px; }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; align-items: start; }
+.scroll { max-height: 720px; overflow: auto; border: 1px solid #ddd; border-radius: 6px; background: #fff; }
+.side { display: flex; flex-direction: column; gap: 12px; }
+.card { background: #fff; border: 1px solid #e4e4e4; border-radius: 8px; }
+.card h2 { font-size: 13px; margin: 0; padding: 10px 12px; border-bottom: 1px solid #eee; font-weight: 600; }
+.card .body { padding: 10px 12px; }
+.legend, .leg { display: flex; gap: 8px; align-items: center; }
+.legend { flex-direction: column; align-items: stretch; }
+.leg span { font-size: 12px; color: #444; }
+.list { max-height: 130px; overflow: auto; }
+.link { color: #2f6fad; cursor: pointer; font-family: Consolas, ui-monospace, monospace; font-size: 11px; padding: 1px 0; }
+.note { background: #f7f7f5; border-radius: 6px; padding: 10px 12px; font-size: 12px; color: #444; }
+@media (max-width: 900px) { .main { grid-template-columns: 1fr; } input[type="search"] { min-width: 0; width: 100%; } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const DATA = {"modules":["Locko.ELMA.Common","Locko.ELMA.Common.Web","Locko.ELMA.Credit","Locko.ELMA.Credit.Web","Locko.ELMA.CRM","Locko.ELMA.CRM.Web","Locko.ELMA.ExtensionsTemplate.Web","Locko.ELMA.Integration.Web","Locko.ELMA.RMQ","Locko.ELMA.RMQ.Web"],"views":[[1,"LockoSettings/Edit"],[1,"LockoSettings/View"],[1,"PdfCreater/PdfButton"],[1,"Shared/EntityForm"],[1,"Shared/FullNameDadata"],[1,"Shared/LockoDefaultScript"],[1,"Shared/LockoDefaultStyle"],[1,"Shared/LockoEntityCombobox"],[1,"Shared/LockoPanelViewItem"],[1,"Shared/NamedPanel"],[1,"Shared/ObjectTypeProperty"],[1,"Shared/Application/AuthorizedPersonScriptPanel"],[1,"Shared/AutoEmailTemplate/AutoEmailTemplateEdit"],[1,"Shared/CloseApplication/CloseApplicationButton"],[1,"Shared/DisplayTemplates/OneStringName"],[1,"Shared/EditorTemplates/FullName"],[1,"Shared/EditorTemplates/LockoEntity"],[1,"Shared/EditorTemplates/OneStringName"],[1,"Shared/EditorTemplates/Entities/LockoEntity"],[1,"Shared/EntityCollection/LockoEntityCollection"],[1,"Shared/Feedback/FeedbackButton"],[1,"Shared/Feedback/FeedbackButtonPopup"],[1,"Shared/Feedback/FeedbackWindow"],[1,"Shared/Locko_Branch/CountLifeInsurence"],[1,"Shared/Locko_Branch/FilterLockoBranch"],[1,"Shared/Locko_Branch/Locko_BranchType"],[1,"Shared/NotificationsPopup/RenderNotificationsPopup"],[1,"Shared/PopupFormButtonScript/LoadEditForm"],[1,"Shared/PopupFormButtonScript/RenderScript"],[1,"Shared/PropertyLoader/PropertyList"],[1,"Shared/PropertyLoader/PropertyLoaderJson"],[1,"Shared/ReportTimeCA/ReportTimeCAButton"],[1,"Shared/ShowFormByUid/RenderFormByUid"],[1,"Shared/SVG/CloseIcon"],[1,"Shared/SVG/InformationIcon"],[1,"Shared/SVG/MoveIcon"],[3,"AssignChecklist"],[3,"BranchProfile"],[3,"EmployeeRoleProfile"],[3,"AdditionalService/ForDecisionOnApplicationGrid"],[3,"Application/ApplicationPortlet"],[3,"Application/ApplicationPortletGrid"],[3,"Application/ApplicationPortletSetting"],[3,"Application/ApplicationSimpleSearchTr"],[3,"Application/ExecutorSelectPopup"],[3,"Application/ReassignTaskWithApprovePopup"],[3,"ContractsData/EnumEditForm"],[3,"CreditIntegration/ClientSearchResponse"],[3,"CreditIntegration/PrincipalBorrowerEditForm"],[3,"CreditIntegration/ProductSuggestionInfo"],[3,"CreditSettings/Edit"],[3,"CreditSettings/View"],[3,"Shared/LockoCreditScript"],[3,"Shared/AdditionalDocument/AdditionalDocumentFormEdit"],[3,"Shared/AdditionalDocument/AdditionalDocumentFormView"],[3,"Shared/AdditionalDocument/AdditionalDocumentSettings"],[3,"Shared/AdditionalDocument/AdditionalDocumentViewSettings"],[3,"Shared/AdditionalDocument/CheckingResult"],[3,"Shared/AdditionalProduct/ApprovedFieldVisibility"],[3,"Shared/AdditionalProductsContract/AdditionalProduct"],[3,"Shared/AdditionalService/AdditionalServiceScriptPanel"],[3,"Shared/AdditionalService/AdditionalServicesFormEdit"],[3,"Shared/AdditionalService/CostRow"],[3,"Shared/AdditionalService/TermCustom"],[3,"Shared/AdditionalService/Type"],[3,"Shared/AdditionalService/TypeProviderProgramDependence"],[3,"Shared/Application/-MaxPercentage"],[3,"Shared/Application/-PercentageValue"],[3,"Shared/Application/-ProductDependence"],[3,"Shared/Application/ApplicationFormEdit"],[3,"Shared/Application/ApplicationHistory"],[3,"Shared/Application/ConditionToDocumentOwnerFilter"],[3,"Shared/Application/ConsumerSettingsEdit"],[3,"Shared/Application/ConsumerSettingsView"],[3,"Shared/Application/CreditSettingsDynamic"],[3,"Shared/Application/CreditSettingsEdit"],[3,"Shared/Application/CreditSettingsView"],[3,"Shared/Application/IdentificationFlag"],[3,"Shared/Application/IsForSale"],[3,"Shared/Application/MortgageInitialPaymentEdit"],[3,"Shared/Application/MortgageSettingsView"],[3,"Shared/Application/NetCommentPanel"],[3,"Shared/Application/Notifications"],[3,"Shared/Application/NotificationsPanel"],[3,"Shared/Application/ProductOptionGrid"],[3,"Shared/Application/ProvisionAjaxPanel"],[3,"Shared/Application/ProvisionPanel"],[3,"Shared/Application/RemoteSale"],[3,"Shared/Application/SignMSBPanel"],[3,"Shared/Application/SmsCollection"],[3,"Shared/Application/SMSGrid"],[3,"Shared/Application/SMSPanel"],[3,"Shared/Application/SourcePanel"],[3,"Shared/Application/TypeOfIdentification"],[3,"Shared/Application/TypeOfIdentificationPanel"],[3,"Shared/Application/UTMPanel"],[3,"Shared/Application/VerticalTabs"],[3,"Shared/Application/Warning"],[3,"Shared/ApplicationPortletStoredProcedure/ApplicationPortlet"],[3,"Shared/ApplicationPortletStoredProcedure/ApplicationPortletGrid"],[3,"Shared/ApplicationPortletStoredProcedure/ApplicationPortletSetting"],[3,"Shared/AuthorizedPerson/SravniAuthorizedPerson"],[3,"Shared/AuthorizedPerson/SravniBranch"],[3,"Shared/AuthorizedSeller/AuthorizedSellerScriptPanel"],[3,"Shared/AuthorizedSeller/Possessions"],[3,"Shared/AuthorizedSeller/TransactionParticipantPart1"],[3,"Shared/AuthorizedSeller/TransactionParticipantPart2"],[3,"Shared/BindingVMToIssuingCities/BindingVMScriptPanel"],[3,"Shared/BindingVMToIssuingCities/CityOfLoanIssue"],[3,"Shared/BindingVMToIssuingCities/CoreRegion"],[3,"Shared/Calendar/CalendarAddMeetingPartial"],[3,"Shared/Calendar/CalendarButton"],[3,"Shared/Calendar/CalendarContainer"],[3,"Shared/Calendar/CalendarPopupListPartial"],[3,"Shared/Calendar/CalendarTablePartial"],[3,"Shared/Calendar/CalendarWindow"],[3,"Shared/Calendar/ExternalMeetingsData"],[3,"Shared/Calendar/ExternalMeetingsGrid"],[3,"Shared/CarOwner/CarOwnerScriptPanel"],[3,"Shared/CollateralDSS/CollateralDSSCollection"],[3,"Shared/CollateralDSS/CollateralDSSFormEdit"],[3,"Shared/Comments/CommentBase"],[3,"Shared/Comments/CommentCollection"],[3,"Shared/Contract/Contract"],[3,"Shared/Contract/ContractCollectionEdit"],[3,"Shared/Contract/ContractCollectionView"],[3,"Shared/Contract/Contracts"],[3,"Shared/Contract/ContractsList"],[3,"Shared/Contract/TitleInsuranceInfo"],[3,"Shared/ContractBase/ContractAttachments"],[3,"Shared/ContractBase/StopFactors"],[3,"Shared/ContractBase/VehicleInfo"],[3,"Shared/ContractsData/EditForm"],[3,"Shared/CreationChannel/CreationChannelScript"],[3,"Shared/CreditAssistans/ApplicationForm/ApplicationFormEdit"],[3,"Shared/CreditAssistans/ApplicationForm/DownPayment"],[3,"Shared/CreditAssistans/ApplicationForm/LoanPurposeVisibility"],[3,"Shared/CreditAssistans/ApplicationForm/OddLot"],[3,"Shared/CreditAssistans/ApplicationForm/PersonalConditionInfo"],[3,"Shared/CreditAssistans/ApplicationForm/PostControlDecision"],[3,"Shared/CreditAssistans/ApplicationForm/RefinancingFlags"],[3,"Shared/CreditAssistans/ApplicationForm/SelectedProductOption"],[3,"Shared/CreditAssistans/ApplicationForm/TransactionParticipantEdit"],[3,"Shared/CreditAssistans/ApplicationForm/TransactionParticipantView"],[3,"Shared/CreditAssistans/AppraiserAutocreditForm/LoanPurposeVisibility"],[3,"Shared/CreditAssistans/AppraiserAutocreditForm/ProvisionAjaxPanel"],[3,"Shared/CreditAssistans/AppraiserAutocreditForm/ProvisionPanel"],[3,"Shared/CreditAssistans/AppraiserAutocreditForm/RecordedIncomeExpenditure"],[3,"Shared/CreditAssistans/AppraiserAutocreditForm/CollateralDSS/CollateralDSSCollection"],[3,"Shared/CreditAssistans/AppraiserAutocreditForm/Property/PropertyDescription"],[3,"Shared/CreditAssistans/AppraiserAutocreditVehicleForm/VehicleAppraiserFilePanel"],[3,"Shared/CreditAssistans/AppraiserForm/AdditionalServiceCollection"],[3,"Shared/CreditAssistans/AppraiserForm/AdditionalServiceCollectionContainer"],[3,"Shared/CreditAssistans/AppraiserForm/CoefficientForCostInsurance"],[3,"Shared/CreditAssistans/AppraiserForm/CoefficientForCostInsuranceReadOnly"],[3,"Shared/CreditAssistans/AppraiserForm/CreateConclusion"],[3,"Shared/CreditAssistans/AppraiserForm/RecordedIncomeExpenditure"],[3,"Shared/CreditAssistans/AppraiserForm/Property/AppraiserAssessmentType"],[3,"Shared/CreditAssistans/AppraiserForm/Property/AppraiserDecisionsHistory"],[3,"Shared/CreditAssistans/AppraiserForm/Property/AppraiserDecisionsHistoryPartial"],[3,"Shared/CreditAssistans/AppraiserForm/Property/DisplayProps"],[3,"Shared/CreditAssistans/AppraiserForm/Property/MarketValueSettings"],[3,"Shared/CreditAssistans/AppraiserForm/Property/ScriptPanel"],[3,"Shared/CreditAssistans/AppraiserForm/TransactionParticipant/DecisionReason"],[3,"Shared/CreditAssistans/AppraiserForm/Workplace/WorkplaceCheckResult"],[3,"Shared/CreditAssistans/AppraiserForm/Workplace/WorkplaceScriptPanel"],[3,"Shared/CreditAssistans/TransactionParticipantForm/ChangeOfFormDataScript"],[3,"Shared/CreditCard/ContactKK"],[3,"Shared/CreditCard/CreditCardName"],[3,"Shared/CreditCard/CreditCardNumber"],[3,"Shared/CreditCard/CreditCardPartial"],[3,"Shared/CreditCard/CreditCardWarning"],[3,"Shared/CreditCard/HiddenInputsWithScripts"],[3,"Shared/CreditCard/LoadCreditCardEditForm"],[3,"Shared/CreditCard/Programm"],[3,"Shared/CreditCard/ZPApp"],[3,"Shared/CreditContract/AdditionalServicesGrid"],[3,"Shared/CreditContract/AgreedDecision"],[3,"Shared/CreditContract/AutoCreditVehicleBillDate"],[3,"Shared/CreditContract/Branch"],[3,"Shared/CreditContract/CoefficientForCostInsuranceAndСostRegistration"],[3,"Shared/CreditContract/ContractConditions"],[3,"Shared/CreditContract/ContractOfSalePurpose"],[3,"Shared/CreditContract/CreditContractForm"],[3,"Shared/CreditContract/CreditContractScriptPanel"],[3,"Shared/CreditContract/CreditVehicleBillDate"],[3,"Shared/CreditContract/CreditVehicleBillNumber"],[3,"Shared/CreditContract/DealManagerInfo"],[3,"Shared/CreditContract/DecisionOnApplicationAuto"],[3,"Shared/CreditContract/DecisionOnApplicationPurpose"],[3,"Shared/CreditContract/DecisionOnApplicationTopPanel"],[3,"Shared/CreditContract/PaymentDayScript"],[3,"Shared/CreditContract/Provision"],[3,"Shared/CreditContract/SpecialOffers"],[3,"Shared/CreditContract/VehicleApplicationInfo"],[3,"Shared/CreditContract/VihicleConditions"],[3,"Shared/CreditManager/AdditionalServiceForm/AdditionalServiceScriptPanel"],[3,"Shared/CreditManager/ApplicationForm/AdditionalProductCollection"],[3,"Shared/CreditManager/ApplicationForm/AdditionalProductsPanel"],[3,"Shared/CreditManager/ApplicationForm/AdditionalServiceAjaxCollection"],[3,"Shared/CreditManager/ApplicationForm/AdditionalServiceCollection"],[3,"Shared/CreditManager/ApplicationForm/AdditionalServiceCollectionAjaxContainer"],[3,"Shared/CreditManager/ApplicationForm/AdditionalServiceCollectionSimple"],[3,"Shared/CreditManager/ApplicationForm/AdditionalServiceDecisionCollectionContainer"],[3,"Shared/CreditManager/ApplicationForm/AdditionalServiceDecisionHtmlStorage"],[3,"Shared/CreditManager/ApplicationForm/ApplicationFormEdit"],[3,"Shared/CreditManager/ApplicationForm/Appointment"],[3,"Shared/CreditManager/ApplicationForm/CityOfLoanIssue"],[3,"Shared/CreditManager/ApplicationForm/CMDecisionDSSIntegration"],[3,"Shared/CreditManager/ApplicationForm/CMDecisionPanelVisibility"],[3,"Shared/CreditManager/ApplicationForm/CMParamsPanelVisibility"],[3,"Shared/CreditManager/ApplicationForm/CMRelationshipPanelVisibility"],[3,"Shared/CreditManager/ApplicationForm/CodeWordOnline"],[3,"Shared/CreditManager/ApplicationForm/CommunicationBranchPanel"],[3,"Shared/CreditManager/ApplicationForm/CoolingPeriod"],[3,"Shared/CreditManager/ApplicationForm/CoolingPeriodPanel"],[3,"Shared/CreditManager/ApplicationForm/CreditCardEditable"],[3,"Shared/CreditManager/ApplicationForm/CreditCardReadonly"],[3,"Shared/CreditManager/ApplicationForm/DecisionAlternativeTypes"],[3,"Shared/CreditManager/ApplicationForm/DecisionCollection"],[3,"Shared/CreditManager/ApplicationForm/DecisionGrid"],[3,"Shared/CreditManager/ApplicationForm/DecisionOnApplicationFromUW"],[3,"Shared/CreditManager/ApplicationForm/DecisionSuggestionInfo"],[3,"Shared/CreditManager/ApplicationForm/Department"],[3,"Shared/CreditManager/ApplicationForm/EditableDecisionGrid"],[3,"Shared/CreditManager/ApplicationForm/EditableLoansForRefinancing"],[3,"Shared/CreditManager/ApplicationForm/EditableLoansForRefinancingGrid"],[3,"Shared/CreditManager/ApplicationForm/HasCheckboxesWithRPC"],[3,"Shared/CreditManager/ApplicationForm/HasMortgage"],[3,"Shared/CreditManager/ApplicationForm/IframePanel"],[3,"Shared/CreditManager/ApplicationForm/IncommingChannel"],[3,"Shared/CreditManager/ApplicationForm/InsuranceContractPanel"],[3,"Shared/CreditManager/ApplicationForm/LoanPurpose"],[3,"Shared/CreditManager/ApplicationForm/LoanPurposeValidation"],[3,"Shared/CreditManager/ApplicationForm/LoansForRefinancing"],[3,"Shared/CreditManager/ApplicationForm/LoansForRefinancingGrid"],[3,"Shared/CreditManager/ApplicationForm/NotificationsOnDirectRefinancing"],[3,"Shared/CreditManager/ApplicationForm/OddLot"],[3,"Shared/CreditManager/ApplicationForm/OnlineIssue"],[3,"Shared/CreditManager/ApplicationForm/PFRRequest"],[3,"Shared/CreditManager/ApplicationForm/PreDecision"],[3,"Shared/CreditManager/ApplicationForm/PreDecisionDSSIntegration"],[3,"Shared/CreditManager/ApplicationForm/PreDecisionInfo"],[3,"Shared/CreditManager/ApplicationForm/PreDecisionPanel"],[3,"Shared/CreditManager/ApplicationForm/PrintAllButton"],[3,"Shared/CreditManager/ApplicationForm/PrintButton"],[3,"Shared/CreditManager/ApplicationForm/ProductDSSIntegration"],[3,"Shared/CreditManager/ApplicationForm/RealPropertyMortgageFlags"],[3,"Shared/CreditManager/ApplicationForm/RedirectToSelectDecision"],[3,"Shared/CreditManager/ApplicationForm/RefinancingFlags"],[3,"Shared/CreditManager/ApplicationForm/RefinancingRequisites"],[3,"Shared/CreditManager/ApplicationForm/Region"],[3,"Shared/CreditManager/ApplicationForm/ReservedContractNumber"],[3,"Shared/CreditManager/ApplicationForm/SelectedDecision"],[3,"Shared/CreditManager/ApplicationForm/SelectedDecisionInfo"],[3,"Shared/CreditManager/ApplicationForm/SelectedDecisionInfoChoiceDecision"],[3,"Shared/CreditManager/ApplicationForm/SettingsScriptPanel"],[3,"Shared/CreditManager/ApplicationForm/SpecialOffers"],[3,"Shared/CreditManager/ApplicationForm/ThroughDBOInBranch"],[3,"Shared/CreditManager/ApplicationForm/VehicleInfoEdit"],[3,"Shared/CreditManager/ApplicationForm/PrepareForDeal/AdditionalServiceCheckboxPanel"],[3,"Shared/CreditManager/ApplicationForm/PrepareForDeal/AdditionalServicesPanel"],[3,"Shared/CreditManager/ApplicationForm/PrepareForDeal/DataFromCreditContract"],[3,"Shared/CreditManager/ApplicationForm/PrepareForDeal/HideFilesTab"],[3,"Shared/CreditManager/ApplicationForm/PrepareForDeal/SelectedDecision"],[3,"Shared/CreditManager/ApplicationForm/PrepareForDeal/SelectedDecisionForCreditParams"],[3,"Shared/CreditManager/ApplicationForm/PrepareForDeal/SelectedDecisionInfo"],[3,"Shared/CreditManager/ApplicationForm/PrepareForDeal/TitleInsurance"],[3,"Shared/CreditManager/ApplicationForm/PrepareForDeal/Mortgage/MortgageAppEditableBillingInformation"],[3,"Shared/CreditManager/ApplicationForm/PrepareForDeal/Mortgage/MortgageAppEstateSalersCollection"],[3,"Shared/CreditManager/ApplicationForm/PrepareForDeal/Mortgage/MortgageAppEstateSalersCollectionContainer"],[3,"Shared/CreditManager/ApplicationForm/PrepareForDeal/Mortgage/BillingInformation/SalerAccountNumber"],[3,"Shared/CreditManager/ApplicationForm/PrepareForDeal/Refinancing/LoansForRefinancingCollection"],[3,"Shared/CreditManager/ApplicationForm/PrepareForDeal/Refinancing/LoansForRefinancingCollectionContainer"],[3,"Shared/CreditManager/ApplicationForm/PrepareForDeal/Refinancing/RefinancingSums"],[3,"Shared/CreditManager/ApplicationForm/RefinancingRequisites/AccountNumber"],[3,"Shared/CreditManager/AutocreditPersonalConditionApproveForm/CreditVehicleAjaxContainer"],[3,"Shared/CreditManager/AutocreditPersonalConditionApproveForm/ProvisionAjaxPanel"],[3,"Shared/CreditManager/AutocreditPersonalConditionApproveForm/SelectedDecision"],[3,"Shared/CreditManager/AutocreditPersonalConditionApproveForm/SelectedDecisionInfo"],[3,"Shared/CreditManager/CMAutocreditPrepareForDealContractRegistrationForm/DecisionCollection"],[3,"Shared/CreditManager/CMAutocreditPrepareForDealContractRegistrationForm/SelectedDecisionInfo"],[3,"Shared/CreditManager/CMAutocreditPrepareForDealForm/CreditVehicleAjaxContainer"],[3,"Shared/CreditManager/CMAutocreditPrepareForDealSelectDateTimeForm/CommunicationBranchPanel"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/AdditionalEmailPanel"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/AdditionalServiceAjaxCollection"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/AdditionalServiceCollection"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/AdditionalServiceCollectionAjaxContainer"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/AdditionalServiceDecisionCollectionContainer"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/AdditionalServiceDecisionHtmlStorage"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/AmountRequested"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/AmountRequestedPartial"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/AutoCreditSettingsScriptPanel"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/CMDecisionDSSIntegration"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/DecisionCollection"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/DecisionGrid"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/DecisionSuggestionInfo"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/EditableDecisionGrid"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/ExternalSale"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/OddLot"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/PreDecision"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/PreDecisionInfo"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/ProductDSSIntegration"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/ProvisionAjaxPanel"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/ProvisionPanel"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/Region"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/RegionReadonly"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/SelectedDecision"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/SelectedDecisionInfo"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/CollateralDSS/CollateralDSSCollection"],[3,"Shared/CreditManager/CreditManagerAutocreditForm/Property/PropertyDescription"],[3,"Shared/CreditManager/CreditManagerAutocreditVehicleForm/PledgeAsCollaterallOfferInput"],[3,"Shared/CreditManager/CreditManagerAutocreditVehicleForm/VehicleScriptPanelWithCarOwners"],[3,"Shared/CreditManager/PersonalConditionApproveForm/CodeWordOnline"],[3,"Shared/CreditManager/PersonalConditionApproveForm/SelectedDecision"],[3,"Shared/CreditManager/PersonalConditionApproveForm/SelectedDecisionInfo"],[3,"Shared/CreditManager/PrepareForDealContractRegistration/DecisionCollection"],[3,"Shared/CreditManager/PrepareForDealContractRegistration/SelectedDecisionInfo"],[3,"Shared/CreditManager/TPCreditManagerAutocreditForm/ContactsScript"],[3,"Shared/CreditManager/TransactionParticipantForm/AfterAddressScriptPanel"],[3,"Shared/CreditManager/TransactionParticipantForm/CitizenshipRadio"],[3,"Shared/CreditManager/TransactionParticipantForm/Experience"],[3,"Shared/CreditManager/TransactionParticipantForm/HiddenInputsForReadOnly"],[3,"Shared/CreditManager/TransactionParticipantForm/InputMaskAdditionalDefinition"],[3,"Shared/CreditManager/TransactionParticipantForm/PassportSeriesAndNumber"],[3,"Shared/CreditManager/TransactionParticipantForm/PreviousPassportSeriesAndNumber"],[3,"Shared/CreditManager/TransactionParticipantForm/TransactionParticipantForm"],[3,"Shared/CreditManager/TransactionParticipantForm/TransactionParticipantScriptPanel"],[3,"Shared/CreditManager/TransactionParticipantForm/TransactionRole"],[3,"Shared/CreditManager/TransactionParticipantForm/WhereLearnAboutProduct"],[3,"Shared/CreditManager/TransactionParticipantForm/WorkplaceValidationPanel"],[3,"Shared/CreditManager/VehicleForm/CMPledgeDecisionReason"],[3,"Shared/CreditManager/VehicleForm/CMVehicleLegalInfoScriptPanel"],[3,"Shared/CreditManager/VehicleForm/PrintActButton"],[3,"Shared/CreditManager/VehicleForm/VehicleFormEdit"],[3,"Shared/CreditManager/VehicleForm/VehicleScriptPanelWithCarOwners"],[3,"Shared/CreditManager/WorkplaceForm/WorkplaceForm"],[3,"Shared/CreditManager/WorkplaceForm/WorkplaceScriptPanel"],[3,"Shared/CrossProductContract/AdditionalService"],[3,"Shared/CrossProductContract/AdditionalServiceProperties"],[3,"Shared/CrossProductContract/ContractKindOfServices"],[3,"Shared/CrossProductContract/ContractProgrammData"],[3,"Shared/CrossProductContract/ContractTermData"],[3,"Shared/CrossProductContract/CrossProductContractForm"],[3,"Shared/CrossProductContract/CrossProductContractScriptPanel"],[3,"Shared/CrossProductContract/CrossProductContractScriptPanelAuto"],[3,"Shared/CrossProductContract/CrossProductContractScriptPanelAutoInsCom"],[3,"Shared/CrossProductContract/ObjectOfInsurances"],[3,"Shared/CrossProductContract/ServiceDescription"],[3,"Shared/CrossProductContract/TitleInsuranceInfo"],[3,"Shared/CrossProductProgram/MAssistanceId"],[3,"Shared/DelayBeforeIssuing/DelayBeforeIssuingEditable"],[3,"Shared/Deposit/DepositScriptPanel"],[3,"Shared/DigitalProfile/DigitalProfileCheckForm"],[3,"Shared/DisplayTemplates/AutoCheckResult"],[3,"Shared/DisplayTemplates/CardNumber"],[3,"Shared/DisplayTemplates/CarOwnerCollection"],[3,"Shared/DisplayTemplates/CollateralDSSCollectionRow"],[3,"Shared/DisplayTemplates/CreditHistoryProperty"],[3,"Shared/DisplayTemplates/Deposit"],[3,"Shared/DisplayTemplates/EntityHistory"],[3,"Shared/DisplayTemplates/InsuranceContractCollection"],[3,"Shared/DisplayTemplates/JointOwnership"],[3,"Shared/DisplayTemplates/JointOwnershipCollection"],[3,"Shared/DisplayTemplates/JointOwnerShipFullCollection"],[3,"Shared/DisplayTemplates/ListDates"],[3,"Shared/DisplayTemplates/LockoAppraiserFileCollection"],[3,"Shared/DisplayTemplates/LockoFileCollection"],[3,"Shared/DisplayTemplates/LockoUnderwriterFileCollection"],[3,"Shared/DisplayTemplates/ManualCheckResultCollection"],[3,"Shared/DisplayTemplates/OddLotHistory"],[3,"Shared/DisplayTemplates/PledgeGrid"],[3,"Shared/DisplayTemplates/POSCollection"],[3,"Shared/DisplayTemplates/ProductOptions"],[3,"Shared/DisplayTemplates/PropertyCollection"],[3,"Shared/DisplayTemplates/ReviewerDecisionCollection"],[3,"Shared/DisplayTemplates/VehicleManualCheckResultCollection"],[3,"Shared/DisplayTemplates/WorkPlaceCollection"],[3,"Shared/DisplayTemplates/AutocreditContracts/BillingInformation"],[3,"Shared/DisplayTemplates/Contracts/BillingInformation"],[3,"Shared/DisplayTemplates/Contracts/FundReciever"],[3,"Shared/DisplayTemplates/CreditAssistans/AppraiserAutocreditForm/CollateralDSS/CollateralDSSCollectionRow"],[3,"Shared/DisplayTemplates/CreditAssistans/AppraiserForm/Deposit"],[3,"Shared/DisplayTemplates/CreditAssistans/AppraiserForm/PropertyCollection"],[3,"Shared/DisplayTemplates/CreditAssistans/AppraiserForm/TransactionParticipantCollection"],[3,"Shared/DisplayTemplates/CreditAssistans/AppraiserForm/WorkPlaceCollection"],[3,"Shared/DisplayTemplates/CreditAssistans/AppraiserForm/LockoContact/LockoContact"],[3,"Shared/DisplayTemplates/CreditAssistans/AppraiserForm/LockoContact/LockoContactList"],[3,"Shared/DisplayTemplates/CreditAssistans/AppraiserForm/LockoPhone/LockoPhone"],[3,"Shared/DisplayTemplates/CreditAssistans/AppraiserForm/LockoPhone/LockoPhoneExtended"],[3,"Shared/DisplayTemplates/CreditAssistans/AppraiserForm/LockoPhone/LockoPhoneList"],[3,"Shared/DisplayTemplates/CreditAssistans/AppraiserForm/LockoPhone/LockoPhoneListExtended"],[3,"Shared/DisplayTemplates/CreditManager/ApplicationForm/LegalSellerCollection"],[3,"Shared/DisplayTemplates/CreditManager/ApplicationForm/LoansForRefinancingCollection"],[3,"Shared/DisplayTemplates/CreditManager/ApplicationForm/LoansForRefinancingCollectionContainer"],[3,"Shared/DisplayTemplates/CreditManager/ApplicationForm/TransactionParticipantCollection"],[3,"Shared/DisplayTemplates/CreditManager/CreditManagerAutocreditForm/CreditVehicle"],[3,"Shared/DisplayTemplates/CreditManager/CreditManagerAutocreditForm/TransactionParticipantCollection"],[3,"Shared/DisplayTemplates/CreditManager/CreditManagerAutocreditForm/CollateralDSS/CollateralDSSCollectionRow"],[3,"Shared/DisplayTemplates/Underwriter/ApplicationForm/LegalSellerCollection"],[3,"Shared/DisplayTemplates/Underwriter/ApplicationForm/TransactionParticipantCollection"],[3,"Shared/DisplayTemplates/Underwriter/UnderwriterAutocreditForm/CollateralDSS/CollateralDSSCollectionRow"],[3,"Shared/DisplayTemplates/UnderwritingFile/UnderwritingDocumentType"],[3,"Shared/EditorTemplates/AdditionalDocumentCollection"],[3,"Shared/EditorTemplates/AdditionalServiceProvider"],[3,"Shared/EditorTemplates/AssessmentPasport"],[3,"Shared/EditorTemplates/AutoCheckResult"],[3,"Shared/EditorTemplates/CarOwnerCollection"],[3,"Shared/EditorTemplates/CollateralDSSCollectionRow"],[3,"Shared/EditorTemplates/CreditHistoryExtProperty"],[3,"Shared/EditorTemplates/CreditHistoryProperty"],[3,"Shared/EditorTemplates/Deposit"],[3,"Shared/EditorTemplates/DepositsCollection"],[3,"Shared/EditorTemplates/EntityHistory"],[3,"Shared/EditorTemplates/InsuranceContractCollection"],[3,"Shared/EditorTemplates/IssueDepartment"],[3,"Shared/EditorTemplates/IssueDepartmentWithCode"],[3,"Shared/EditorTemplates/JointOwnershipCollection"],[3,"Shared/EditorTemplates/LegalSellerShortPropertyCollection"],[3,"Shared/EditorTemplates/ListDates"],[3,"Shared/EditorTemplates/LockoAppraiserFileCollection"],[3,"Shared/EditorTemplates/LockoAppraiserFileCollectionForPopup"],[3,"Shared/EditorTemplates/LockoFileCollection"],[3,"Shared/EditorTemplates/LockoUnderwriterFileCollection"],[3,"Shared/EditorTemplates/ManualCheckResultCollection"],[3,"Shared/EditorTemplates/PledgeGrid"],[3,"Shared/EditorTemplates/POSCollection"],[3,"Shared/EditorTemplates/PrevisIssueDepartmentWithCode"],[3,"Shared/EditorTemplates/ProductOptions"],[3,"Shared/EditorTemplates/PropertyCollection"],[3,"Shared/EditorTemplates/ReviewerDecisionCollection"],[3,"Shared/EditorTemplates/ShortPropertyCollection"],[3,"Shared/EditorTemplates/VehicleInsuranceCollection"],[3,"Shared/EditorTemplates/VehicleManualCheckResultCollection"],[3,"Shared/EditorTemplates/Workplace"],[3,"Shared/EditorTemplates/WorkPlaceCollection"],[3,"Shared/EditorTemplates/AdditionalProduct/ProductType"],[3,"Shared/EditorTemplates/AdditionalProduct/Program"],[3,"Shared/EditorTemplates/AutocreditContracts/BillingInformation"],[3,"Shared/EditorTemplates/Contracts/AdditionalProduct"],[3,"Shared/EditorTemplates/Contracts/BillingInformation"],[3,"Shared/EditorTemplates/Contracts/ContractDate"],[3,"Shared/EditorTemplates/Contracts/CreditContract_ContractDate"],[3,"Shared/EditorTemplates/Contracts/FundReciever"],[3,"Shared/EditorTemplates/Contracts/Guarantor"],[3,"Shared/EditorTemplates/Contracts/Number"],[3,"Shared/EditorTemplates/Contracts/Saller"],[3,"Shared/EditorTemplates/Contracts/SallerIsNotFundReciever"],[3,"Shared/EditorTemplates/Contracts/TransactionParticipant"],[3,"Shared/EditorTemplates/CreditAssistans/AppraiserAutocreditForm/CollateralDSS/CollateralDSSCollectionRow"],[3,"Shared/EditorTemplates/CreditAssistans/AppraiserForm/AdditionalDocumentCollection"],[3,"Shared/EditorTemplates/CreditAssistans/AppraiserForm/Deposit"],[3,"Shared/EditorTemplates/CreditManager/ApplicationForm/LegalSellerCollection"],[3,"Shared/EditorTemplates/CreditManager/ApplicationForm/LoansForRefinancingCollection"],[3,"Shared/EditorTemplates/CreditManager/ApplicationForm/LoansForRefinancingCollectionContainer"],[3,"Shared/EditorTemplates/CreditManager/ApplicationForm/TransactionParticipantCollection"],[3,"Shared/EditorTemplates/CreditManager/CreditManagerAutocreditForm/CreditVehicle"],[3,"Shared/EditorTemplates/CreditManager/CreditManagerAutocreditForm/TransactionParticipantCollection"],[3,"Shared/EditorTemplates/CreditManager/CreditManagerAutocreditForm/CollateralDSS/CollateralDSSCollectionRow"],[3,"Shared/EditorTemplates/Entities/TransactionRole"],[3,"Shared/EditorTemplates/Underwriter/ApplicationForm/TransactionParticipantCollection"],[3,"Shared/EditorTemplates/Underwriter/UnderwriterAutocreditForm/CollateralDSS/CollateralDSSCollectionRow"],[3,"Shared/EntityHistory/CreationChannelHistory"],[3,"Shared/EntityHistory/DelayBeforeIssuingHistory"],[3,"Shared/ExtInsuranceContract/ContractNumberAndContractDate"],[3,"Shared/ExtInsuranceContract/ExtInsuranceContractScriptPanel"],[3,"Shared/ExtInsuranceContract/InsuranceContractStartDateAndFinishDate"],[3,"Shared/ExtInsuranceContract/InsuranceKindAndInsuranceType"],[3,"Shared/File/AttachmentCreditManagerView"],[3,"Shared/File/FileUploader"],[3,"Shared/File/LockoFileBaseCollection"],[3,"Shared/File/LockoFileBaseCollectionForPopup"],[3,"Shared/File/LockoFileBaseCollectionForPostControl"],[3,"Shared/File/LockoFileBaseCollectionItems"],[3,"Shared/File/UnderwriterFilesForOthers"],[3,"Shared/IncomesExpenditures/CAIncomes"],[3,"Shared/IncomesExpenditures/CATotalIncomes"],[3,"Shared/IncomesExpenditures/CMIncomesExpenditures"],[3,"Shared/IncomesExpenditures/IncomesFromWorkplace"],[3,"Shared/IncomesExpenditures/UWExpenditures"],[3,"Shared/IncomesExpenditures/UWIncomes"],[3,"Shared/InsuredPerson/Relation"],[3,"Shared/IssueAuthority/IssueAuthorityScripts"],[3,"Shared/JointOwnership/JointFIO"],[3,"Shared/JointOwnership/JointOwnershipCollectionHeader"],[3,"Shared/JointOwnership/JointOwnerShipLink"],[3,"Shared/LegalSeller/AuthorizedSeller"],[3,"Shared/LegalSeller/LegalSellerName"],[3,"Shared/LegalSeller/LegalSellerRowCollectionName"],[3,"Shared/LegalSeller/LegalSellerScriptPanel"],[3,"Shared/MultipartTariffs/ClientCategoryPanel"],[3,"Shared/OddLot/LoadOddLotEditForm"],[3,"Shared/OddLot/NetCommentPanel"],[3,"Shared/OddLot/OddLotHiddenInputs"],[3,"Shared/OddLot/OddLotPartial"],[3,"Shared/PersonalCondition/HiddenInputs"],[3,"Shared/PersonalCondition/IndividualConditionsPurpose"],[3,"Shared/PersonalCondition/LoadPersonalConditionEditForm"],[3,"Shared/PersonalCondition/NetComments"],[3,"Shared/PersonalCondition/PersonalConditionDecisionsGrid"],[3,"Shared/PersonalCondition/PersonalConditionGrid"],[3,"Shared/PersonalCondition/PersonalConditionPartial"],[3,"Shared/PFR/PFRRecordDate"],[3,"Shared/PledgeContract/Pledge"],[3,"Shared/PledgeContract/Pledges"],[3,"Shared/PledgeContract/Pledgor"],[3,"Shared/PointOfSale/BranchAndRegion"],[3,"Shared/PointOfSale/BranchReadOnly"],[3,"Shared/PointOfSale/Emails"],[3,"Shared/POS/POSBankAccount"],[3,"Shared/POS/POSBankDetails"],[3,"Shared/POS/POSContract"],[3,"Shared/POS/POSContractor"],[3,"Shared/POS/POSForm"],[3,"Shared/POS/POSPanel"],[3,"Shared/PostControl/ApplicationPostControlOutroResult"],[3,"Shared/PostControl/CreditParams"],[3,"Shared/PostControl/PostControlForm"],[3,"Shared/PostControl/TransactionParticipant"],[3,"Shared/Program/ProgramScriptPanel"],[3,"Shared/Property/ApartmentSettings"],[3,"Shared/Property/AWPropertyFormPanel"],[3,"Shared/Property/AWRealPropertyScript"],[3,"Shared/Property/DependsOnPledgeAsCollaterallOfferProperty"],[3,"Shared/Property/Evaluation"],[3,"Shared/Property/MarketValueSettings"],[3,"Shared/Property/MarketValueView"],[3,"Shared/Property/MarkModelDependence"],[3,"Shared/Property/PledgeAsCollaterallOffer"],[3,"Shared/Property/PledgeSettings"],[3,"Shared/Property/PropertyCollectionHeader"],[3,"Shared/Property/PropertyDescription"],[3,"Shared/Property/PropertyFormSettings"],[3,"Shared/Property/PropertyJoint"],[3,"Shared/Property/PropertyScriptPanel"],[3,"Shared/PurchaseAndSaleContract/PurchaseAndSaleContractForm"],[3,"Shared/PurchaseAndSaleContract/SellerInfo"],[3,"Shared/RealProperty/LinkOtherWithProperty"],[3,"Shared/RealProperty/RealLPCategories"],[3,"Shared/RealProperty/RealPropertyAppraiserFilePanel"],[3,"Shared/RealProperty/RealPropertyCreditManagerFilePanel"],[3,"Shared/RealProperty/RealPropertyFormEdit"],[3,"Shared/RealProperty/RealPropertyShareEdit"],[3,"Shared/RealProperty/RealType"],[3,"Shared/RealProperty/ShortRealPropertyFormEdit"],[3,"Shared/ReviewerDecision/ReviewerDecisionScriptPanel"],[3,"Shared/SMS/SMSTemplate"],[3,"Shared/TransactionParticipant/-CheckPanel"],[3,"Shared/TransactionParticipant/-PhoneListScriptPanel"],[3,"Shared/TransactionParticipant/ChildrenDatesOfBirth"],[3,"Shared/TransactionParticipant/ClientSearchRequestForm"],[3,"Shared/TransactionParticipant/CopyDataButton"],[3,"Shared/TransactionParticipant/HistoricalApplicationsGrid"],[3,"Shared/TransactionParticipant/InfoAboutChildren"],[3,"Shared/TransactionParticipant/KAStopFactors"],[3,"Shared/TransactionParticipant/PersonalEmail"],[3,"Shared/TransactionParticipant/PhoneEmail"],[3,"Shared/TransactionParticipant/Possessions"],[3,"Shared/TransactionParticipant/PrincipalBorrowerJson"],[3,"Shared/TransactionParticipant/Snils"],[3,"Shared/TransactionParticipant/TransactionParticipantForm"],[3,"Shared/TransactionParticipant/ValidateSNILSNumber"],[3,"Shared/Underwriter/ApplicationForm/AdditionalProductCollection"],[3,"Shared/Underwriter/ApplicationForm/AdditionalProductsPanel"],[3,"Shared/Underwriter/ApplicationForm/AdditionalServiceCollection"],[3,"Shared/Underwriter/ApplicationForm/AdditionalServiceCollectionContainer"],[3,"Shared/Underwriter/ApplicationForm/ApplicationFormEdit"],[3,"Shared/Underwriter/ApplicationForm/CalculatedInfo"],[3,"Shared/Underwriter/ApplicationForm/CreateConclusion"],[3,"Shared/Underwriter/ApplicationForm/DecisionCollection"],[3,"Shared/Underwriter/ApplicationForm/DecisionGrid"],[3,"Shared/Underwriter/ApplicationForm/DecisionSuggestionInfo"],[3,"Shared/Underwriter/ApplicationForm/NotificationsHistory"],[3,"Shared/Underwriter/ApplicationForm/NotificationsHistoryPartial"],[3,"Shared/Underwriter/ApplicationForm/OddLot"],[3,"Shared/Underwriter/ApplicationForm/PersonalConditionInfo"],[3,"Shared/Underwriter/ApplicationForm/RecordedIncomeExpenditure"],[3,"Shared/Underwriter/ApplicationForm/RefinancingFlags"],[3,"Shared/Underwriter/ApplicationForm/ReviewerDecisionShowOptions"],[3,"Shared/Underwriter/ApplicationForm/SelectedDecisionOnApplication"],[3,"Shared/Underwriter/ApplicationForm/SelectedProductOption"],[3,"Shared/Underwriter/ApplicationForm/UnderwriterCommentPanel"],[3,"Shared/Underwriter/ApplicationForm/UnderwriterDecisionOnApplicationEdit"],[3,"Shared/Underwriter/ApplicationForm/UnderwriterDecisionReason"],[3,"Shared/Underwriter/ApplicationForm/UnderwriterSubcause"],[3,"Shared/Underwriter/ApplicationForm/UWDecisionDSSIntegration"],[3,"Shared/Underwriter/ApplicationForm/VehicleInfoView"],[3,"Shared/Underwriter/FraudMonitoringForm/DecisionCollection"],[3,"Shared/Underwriter/FraudMonitoringForm/DecisionGrid"],[3,"Shared/Underwriter/FraudMonitoringForm/RecordedIncomeExpenditure"],[3,"Shared/Underwriter/FraudMonitoringForm/ServiceReceivingChannel"],[3,"Shared/Underwriter/FraudMonitoringForm/UnderwriterDecisionOnApplicationEdit"],[3,"Shared/Underwriter/FraudMonitoringForm/UnderwriterDecisionReason"],[3,"Shared/Underwriter/Retail/LoansForRefinancing"],[3,"Shared/Underwriter/Retail/LoansForRefinancingGrid"],[3,"Shared/Underwriter/Retail/SelectedDecision"],[3,"Shared/Underwriter/Retail/SelectedDecisionForm"],[3,"Shared/Underwriter/TransactionParticipantForm/AfterAddressScriptPanel"],[3,"Shared/Underwriter/TransactionParticipantForm/AutoCheckResults"],[3,"Shared/Underwriter/TransactionParticipantForm/CitizenshipRadio"],[3,"Shared/Underwriter/TransactionParticipantForm/CreditHistoryDisplay"],[3,"Shared/Underwriter/TransactionParticipantForm/CreditHistoryEdit"],[3,"Shared/Underwriter/TransactionParticipantForm/CreditHistoryEditButton"],[3,"Shared/Underwriter/TransactionParticipantForm/CreditHistoryExt"],[3,"Shared/Underwriter/TransactionParticipantForm/CreditHistoryExtDisplay"],[3,"Shared/Underwriter/TransactionParticipantForm/CreditHistoryExtProperty"],[3,"Shared/Underwriter/TransactionParticipantForm/CreditHistoryExtPropertyDisplay"],[3,"Shared/Underwriter/TransactionParticipantForm/DecisionReason"],[3,"Shared/Underwriter/TransactionParticipantForm/Experience"],[3,"Shared/Underwriter/TransactionParticipantForm/HiddenInputsForReadOnly"],[3,"Shared/Underwriter/TransactionParticipantForm/IgnoreFSSPReject"],[3,"Shared/Underwriter/TransactionParticipantForm/LoadCreditHistoryEditForm"],[3,"Shared/Underwriter/TransactionParticipantForm/NetCommentPanel"],[3,"Shared/Underwriter/TransactionParticipantForm/SumSubUrl"],[3,"Shared/Underwriter/TransactionParticipantForm/TopFullNameRolePanel"],[3,"Shared/Underwriter/TransactionParticipantForm/TransactionParticipantForm"],[3,"Shared/Underwriter/TransactionParticipantForm/TransactionParticipantScriptPanel"],[3,"Shared/Underwriter/TransactionParticipantForm/TransactionRole"],[3,"Shared/Underwriter/TransactionParticipantForm/UnderwriterCommentPanel"],[3,"Shared/Underwriter/TransactionParticipantForm/UnderwriterDecisionOnTP"],[3,"Shared/Underwriter/TransactionParticipantForm/WorkplaceValidationPanel"],[3,"Shared/Underwriter/UnderwriterAutocreditForm/AdditionalEmailPanel"],[3,"Shared/Underwriter/UnderwriterAutocreditForm/AmountRequested"],[3,"Shared/Underwriter/UnderwriterAutocreditForm/AmountRequestedPartial"],[3,"Shared/Underwriter/UnderwriterAutocreditForm/ApprovedPropertyValueUnderwriter"],[3,"Shared/Underwriter/UnderwriterAutocreditForm/CalculatedInfo"],[3,"Shared/Underwriter/UnderwriterAutocreditForm/DecisionCollection"],[3,"Shared/Underwriter/UnderwriterAutocreditForm/DecisionGrid"],[3,"Shared/Underwriter/UnderwriterAutocreditForm/DecisionSuggestionInfo"],[3,"Shared/Underwriter/UnderwriterAutocreditForm/DownPayment"],[3,"Shared/Underwriter/UnderwriterAutocreditForm/LoanPurposeVisibility"],[3,"Shared/Underwriter/UnderwriterAutocreditForm/ProvisionAjaxPanel"],[3,"Shared/Underwriter/UnderwriterAutocreditForm/ProvisionPanel"],[3,"Shared/Underwriter/UnderwriterAutocreditForm/RecordedIncomeExpenditure"],[3,"Shared/Underwriter/UnderwriterAutocreditForm/RegionReadonly"],[3,"Shared/Underwriter/UnderwriterAutocreditForm/UWDecisionDSSIntegration"],[3,"Shared/Underwriter/UnderwriterAutocreditForm/CollateralDSS/CollateralDSSCollection"],[3,"Shared/Underwriter/UnderwriterAutocreditForm/Property/PropertyDescription"],[3,"Shared/Underwriter/UnderwriterAutocreditFraudMonitoringForm/RecordedIncomeExpenditure"],[3,"Shared/Underwriter/UnderwriterAutocreditPrepareForDealForm/RecordedIncomeExpenditure"],[3,"Shared/Underwriter/UnderwriterPrepareForDealForm/DecisionCollection"],[3,"Shared/Underwriter/UnderwriterPrepareForDealForm/DecisionGrid"],[3,"Shared/Underwriter/UnderwriterPrepareForDealForm/RecordedIncomeExpenditure"],[3,"Shared/Underwriter/VehicleForm/UNVehicleLegalInfoScriptPanel"],[3,"Shared/Underwriter/VehicleForm/VehicleFormEdit"],[3,"Shared/Underwriter/VehicleForm/VehicleValuablePanel"],[3,"Shared/Underwriter/WorkplaceForm/WorkplaceCheckResult"],[3,"Shared/Underwriter/WorkplaceForm/WorkplaceForm"],[3,"Shared/Underwriter/WorkplaceForm/WorkplaceScriptPanel"],[3,"Shared/Underwriter/WorkplaceForm/WorkplaceScriptPanelAuto"],[3,"Shared/Vehicle/ElectronicCertificateScripts"],[3,"Shared/Vehicle/PledgeCheckPanel"],[3,"Shared/Vehicle/PrintButton"],[3,"Shared/Vehicle/ShortVehicleFormEdit"],[3,"Shared/Vehicle/VehicleAppraiserFilePanel"],[3,"Shared/Vehicle/VehicleCreditManagerFilePanel"],[3,"Shared/Vehicle/VehicleFormEdit"],[3,"Shared/Vehicle/VehicleFormView"],[3,"Shared/Vehicle/VehicleInspectionInformation"],[3,"Shared/Vehicle/VehicleLegalInfoFormEdit"],[3,"Shared/Vehicle/VehicleLegalInfoScriptPanel"],[3,"Shared/Vehicle/VehicleScriptPanel"],[3,"Shared/WorflowInstanceHistory/WorkflowInstanceHistory"],[3,"Shared/WorflowInstanceHistory/WorkflowInstancePart"],[3,"Shared/WorkflowTaskExecuteExtension/WorkflowTaskExecuteExtensionWindow"],[3,"Shared/Workplace/ShortName"],[3,"Shared/Workplace/Srok"],[3,"Shared/Workplace/WorkContractType"],[3,"Shared/Workplace/WorkplaceForm"],[5,"Shared/Address/AddressContent"],[5,"Shared/ContractorLegal/ContractorLegalEdit"],[5,"Shared/ContractorLegal/ContractorLegalScriptPanel"],[5,"Shared/ContractorLegal/ContractorLegalView"],[5,"Shared/DisplayTemplates/OneStringAddress"],[5,"Shared/DisplayTemplates/LockoContact/LockoContact"],[5,"Shared/DisplayTemplates/LockoContact/LockoContactList"],[5,"Shared/DisplayTemplates/LockoPhone/CallResultProperty"],[5,"Shared/DisplayTemplates/LockoPhone/LockoPhone"],[5,"Shared/DisplayTemplates/LockoPhone/LockoPhoneExtended"],[5,"Shared/DisplayTemplates/LockoPhone/LockoPhoneList"],[5,"Shared/DisplayTemplates/LockoPhone/LockoPhoneListCheck"],[5,"Shared/DisplayTemplates/LockoPhone/LockoPhoneListExtended"],[5,"Shared/EditorTemplates/LockoRelationshipPhone"],[5,"Shared/EditorTemplates/OneStringAddress"],[5,"Shared/EditorTemplates/OneStringLegalAddress"],[5,"Shared/EditorTemplates/TextBoxContractorLegalCreator"],[5,"Shared/EditorTemplates/LockoContact/LockoContact"],[5,"Shared/EditorTemplates/LockoContact/LockoContactList"],[5,"Shared/EditorTemplates/LockoPhone/LockoPhone"],[5,"Shared/EditorTemplates/LockoPhone/LockoPhoneCheck"],[5,"Shared/EditorTemplates/LockoPhone/LockoPhoneExtended"],[5,"Shared/EditorTemplates/LockoPhone/LockoPhoneList"],[5,"Shared/EditorTemplates/LockoPhone/LockoPhoneListCheck"],[5,"Shared/EditorTemplates/LockoPhone/LockoPhoneListExtended"],[5,"Shared/EditorTemplates/LockoPhone/SimpleLockoPhone"],[5,"Shared/EditorTemplates/LockoPhone/SimpleLockoPhoneExtended"],[5,"Shared/EditorTemplates/LockoPhone/SimpleLockoPhoneList"],[5,"Shared/LockoContractPhone/ContractPhoneCheck"],[5,"Shared/LockoContractPhone/ContractPhoneCheckList"],[5,"Shared/PointOfSale/GeneralPartner"],[5,"Shared/PointOfSale/PointOfSaleEdit"],[6,"Home/Index"],[7,"CurrencySettings/Edit"],[7,"CurrencySettings/View"],[7,"IntegrationSettings/Edit"],[7,"IntegrationSettings/View"],[9,"CommonQueuesSettings/Edit"],[9,"CommonQueuesSettings/View"],[9,"Shared/TestCollection"]],"forms":[["Locko_AuthorizedPerson","Form",0],["Locko_AutoEmailTemplate","Form",0],["Locko_Branch","Form",0],["Locko_FullName","EditOneString",0],["Locko_FullName","Form",0],["Locko_FullName","View",0],["Locko_GroundsForLiving","Form",0],["Locko_AdditionalDocument","Form",2],["Locko_AdditionalDocument","Form1",2],["Locko_AdditionalProduct","Form",2],["Locko_AdditionalProduct","Form1",2],["Locko_AdditionalProduct","Form2",2],["Locko_AdditionalService","AutocreditCollectionRowForm",2],["Locko_AdditionalService","Edit",2],["Locko_AdditionalService","Form",2],["Locko_AdditionalService","Form1",2],["Locko_AdditionalService","Row",2],["Locko_Application","AppraiserAutocreditForm",2],["Locko_Application","AppraiserForm",2],["Locko_Application","AutocreditPersonalConditionApproveForm",2],["Locko_Application","CMAutocreditPrepareForDealContractRegistrationForm",2],["Locko_Application","CMAutocreditPrepareForDealForm",2],["Locko_Application","CMAutocreditPrepareForDealSelectDateTimeForm",2],["Locko_Application","CreditAssistansForm",2],["Locko_Application","CreditManagerAutocreditForm",2],["Locko_Application","CreditManagerForm",2],["Locko_Application","Edit",2],["Locko_Application","FraudMonitoringForm",2],["Locko_Application","PersonalConditionApproveForm",2],["Locko_Application","PrepareForDeal",2],["Locko_Application","PrepareForDealChioceDecision",2],["Locko_Application","PrepareForDealContractRegistration",2],["Locko_Application","PrepareForDealSelectDateTime",2],["Locko_Application","UnderwriterAutocreditForm",2],["Locko_Application","UnderwriterAutocreditFraudMonitoringForm",2],["Locko_Application","UnderwriterAutocreditPrepareForDealForm",2],["Locko_Application","UnderwriterForm",2],["Locko_Application","UnderwriterPrepareForDealForm",2],["Locko_Application","Underwriter_ApplicationEdit",2],["Locko_Application","Underwriter_Retail",2],["Locko_Application","СontractForm",2],["Locko_ApplicationPostControlResult","Form",2],["Locko_AuthorizedSeller","Form",2],["Locko_AuthPersonsSravni","Form",2],["Locko_BindingVMToIssuingCities","Edit",2],["Locko_BindingVMToIssuingCities","View",2],["Locko_BranchApproveMatrix","Form",2],["Locko_CarOwner","Form",2],["Locko_CarOwner","Form1",2],["Locko_CollateralsDSS","Form",2],["Locko_CollateralsDSS","Form1",2],["Locko_CollateralsDSS","Form2",2],["Locko_CollateralsDSS","Form3",2],["Locko_CollateralsDSS","UnderwriterAutocreditCollectionRow",2],["Locko_CompanyGroup","Form",2],["Locko_ConsumerApplicationInfo","Edit",2],["Locko_ConsumerApplicationInfo","View",2],["Locko_ContactPersonKK","Form",2],["Locko_ContactPersonKK","Form1",2],["Locko_CreationChannel","Form",2],["Locko_CreationChannel","Form1",2],["Locko_CreditCard","DisplayForm",2],["Locko_CreditCard","EditForm",2],["Locko_CreditHistory","Form",2],["Locko_CrossProductProgram","DisplayForm",2],["Locko_CrossProductProgram","EditForm",2],["Locko_DecisionOnApplication","Form",2],["Locko_DelayBeforeIssuing","Form",2],["Locko_DelayBeforeIssuing","Form1",2],["Locko_Deposit","CollectionItemForm",2],["Locko_Deposit","Form",2],["Locko_DigitalProfileCheck","Form",2],["Locko_DigitalProfileCheck","Form1",2],["Locko_ExtInsuranceContract","Form",2],["Locko_ExtInsuranceContract","Form1",2],["Locko_InsuredPerson","Form",2],["Locko_InsuredPerson","Form1",2],["Locko_IssueAuthority","Edit",2],["Locko_IssueAuthority","View",2],["Locko_JointOwnership","Form",2],["Locko_JointOwnership","Form1",2],["Locko_LegalSeller","LegalSellerForm",2],["Locko_LegalSeller","LegalSellerFormRow",2],["Locko_LoansForRefinancing","Form",2],["Locko_LoansForRefinancing","Form1",2],["Locko_LoansForRefinancing","Form2",2],["Locko_ManualCheckResult","Edit",2],["Locko_ManualCheckResult","View",2],["Locko_MultipartTariffs","Edit",2],["Locko_MultipartTariffs","View",2],["Locko_OddLot","EditForm",2],["Locko_PersonalCondition","EditForm",2],["Locko_POS","Form",2],["Locko_POS","Form1",2],["Locko_Program","Form",2],["Locko_Program","Form1",2],["Locko_Property","Form",2],["Locko_Property","View",2],["Locko_RealProperty","Edit",2],["Locko_RealProperty","Form",2],["Locko_RealProperty","Form1",2],["Locko_RealProperty","Form2",2],["Locko_RealProperty","View",2],["Locko_ReviewerDecision","Form",2],["Locko_ReviewerDecision","Form1",2],["Locko_SalaryProject","Form",2],["Locko_SalaryProject","Form1",2],["Locko_SMSSettings","Form",2],["Locko_SMSSettings","Form1",2],["Locko_TransactionParticipant","AppraiserForm",2],["Locko_TransactionParticipant","ChangeOfFormData",2],["Locko_TransactionParticipant","CollectionRow",2],["Locko_TransactionParticipant","CreditManagerForm",2],["Locko_TransactionParticipant","Edit",2],["Locko_TransactionParticipant","EditBillinginformationForm",2],["Locko_TransactionParticipant","Form",2],["Locko_TransactionParticipant","Form1",2],["Locko_TransactionParticipant","MortgageRowForm",2],["Locko_TransactionParticipant","TPCreditManagerAutocreditForm",2],["Locko_TransactionParticipant","TransactionParticipantCreditHistoryEdit",2],["Locko_TransactionParticipant","UnderwriterAutocreditForm",2],["Locko_TransactionParticipant","UnderwriterForm",2],["Locko_TransactionParticipant","View",2],["Locko_TrustedPersonsPOS","Form",2],["Locko_TrustedPersonsPOS","Form1",2],["Locko_TypeOfServices","Form",2],["Locko_Vehicle","AppraiserAutocreditVehicleForm",2],["Locko_Vehicle","AppraiserForm",2],["Locko_Vehicle","CMCreditVehicleCollectionRow",2],["Locko_Vehicle","CreditManagerAutocreditVehicleForm",2],["Locko_Vehicle","CreditManagerForm",2],["Locko_Vehicle","Edit",2],["Locko_Vehicle","Form",2],["Locko_Vehicle","Form1",2],["Locko_Vehicle","Form2",2],["Locko_Vehicle","UnderwriterAutocreditVehicleForm",2],["Locko_Vehicle","UnderwriterForm",2],["Locko_Vehicle","View",2],["Locko_VehicleApplicationInfo","ValuationAndDownPaymentEdit",2],["Locko_VehicleApplicationInfo","ValuationAndDownPaymentView",2],["Locko_VehicleApplicationInfo","VehicleInfo",2],["Locko_VehicleApplicationInfo","VehicleInfoView",2],["Locko_VehicleInsurance","Form",2],["Locko_VehicleInsurance","Form1",2],["Locko_VehicleLegalInfo","Form",2],["Locko_VehicleManualCheckResult","Form",2],["Locko_VehicleManualCheckResult","Form1",2],["Locko_Workplace","AppraiserForm",2],["Locko_Workplace","CreditManagerForm",2],["Locko_Workplace","Form",2],["Locko_Workplace","Form1",2],["Locko_Workplace","UnderwriterForm",2],["Locko_AdditionalProductsContract","Form",2],["Locko_CollateralAccountContract","Form",2],["Locko_ContractBase","Form",2],["Locko_CreditContract","CreditContractAutoForm",2],["Locko_CreditContract","CreditContractConsumerForm",2],["Locko_CreditContract","Form",2],["Locko_CrossProductContract","DisplayInsuranceCompanyForm",2],["Locko_CrossProductContract","EditInsuranceCompanyForm",2],["Locko_CrossProductContract","Form",2],["Locko_CrossProductContract","Form1",2],["Locko_CrossProductContract","Form2",2],["Locko_CrossProductContract","Form3",2],["Locko_CrossProductContract","Form4",2],["Locko_CrossProductContract","Form5",2],["Locko_PledgeContract","Form",2],["Locko_PurchaseAndSaleContract","Form",2],["Locko_PurchaseAndSaleContract","Form1",2],["Locko_SuretyContract","Form",2],["Locko_BillingInformation","Form",4],["Locko_ContractorLegalExt","Display",4],["Locko_ContractorLegalExt","Edit",4],["Locko_ContractorLegalExt","Form",4],["Locko_ContractorLegalExt","Form1",4],["Locko_ContractorLegalExt","Form2",4],["Locko_ContractorLegalExt","Form3",4],["Locko_PointOfSale","Form",4],["Locko_PointOfSale","Form1",4],["TestChild","Form",8],["TestParent","Form",8],["WfiRmqMessage","Form",8]],"controllers":[["AuthorizedPerson",1],["Feedback",1],["LockoDadata",1],["LockoEntity",1],["LockoPosition",1],["LockoSettings",1],["LockoSettingsModule",1],["Map",1],["PdfCreater",1],["PopupFormButtonScript",1],["PropertyLoader",1],["AdditionalDocuments",3],["AdditionalService",3],["Application",3],["AppraiserFile",3],["Calendar",3],["Checklist",3],["Children",3],["Comment",3],["ContractData",3],["CreationChannel",3],["CreditCard",3],["CreditContract",3],["CreditIntegration",3],["CreditSettings",3],["CreditSettingsModule",3],["DelayBeforeIssuing",3],["Distribution",3],["FileBase",3],["File",3],["OddLot",3],["PersonalCondition",3],["PreApproved",3],["RealProperty",3],["SMS",3],["TransactionParticipant",3],["UnderwritingFile",3],["Vehicle",3],["VehicleInfo",3],["WorkflowInstanceHistory",3],["Workplace",3],["Address",5],["Phone",5],["Home",6],["CurrencySettings",7],["CurrencySettingsModule",7],["IntegrationSettings",7],["IntegrationSettingsModule",7],["CommonQueuesSettings",9],["CommonQueuesSettingsModule",9]],"portlets":[["ApplicationPortlet",3],["ApplicationPortletStoredProcedure",3]],"adjustments":[["CreditContractPropertyViewItemAdjustment",3,"ILocko_CreditContract"],["CrossProductContractPropertyViewItemAdjustment",3,"ILocko_CrossProductContract,ILocko_ContractBase"],["Locko_ContractBaseViewItemAdjustment",3,"ILocko_ContractBase"],["Locko_FormViewItemHideTranformate",3,""],["Locko_OrderSortingOptionsPropertyViewItemAdjustment",3,"ILocko_OrderSortingOptions"],["Locko_QualificationPropertyViewItemAdjustment",3,"ILocko_Qualification"],["Locko_VehicleViewItemAdjustment",3,"ILocko_Vehicle"],["RealPropertyNumberOfOwnersViewitemAdjustment",3,"ILocko_RealProperty"],["SallerPropertyViewItemAdjustment",3,"ILocko_CreditContract"]],"edges":[[0,0,11],[0,1,12],[0,2,25],[0,2,23],[0,3,17],[0,4,4],[0,7,56],[0,7,55],[0,7,53],[0,8,54],[0,10,436],[0,10,437],[0,10,58],[0,13,61],[0,14,64],[0,14,404],[0,14,63],[0,14,196],[0,14,65],[0,15,64],[0,15,404],[0,15,63],[0,15,60],[0,15,65],[0,16,62],[0,17,634],[0,17,144],[0,17,621],[0,17,622],[0,17,147],[0,17,145],[0,17,625],[0,17,626],[0,18,88],[0,18,153],[0,18,155],[0,18,423],[0,18,384],[0,18,152],[0,18,156],[0,19,276],[0,19,279],[0,19,277],[0,20,282],[0,20,298],[0,20,683],[0,20,281],[0,20,280],[0,21,282],[0,21,298],[0,21,683],[0,22,305],[0,22,283],[0,23,83],[0,23,76],[0,23,92],[0,23,78],[0,23,87],[0,23,234],[0,23,453],[0,23,137],[0,23,514],[0,23,426],[0,23,141],[0,23,152],[0,23,154],[0,23,138],[0,23,243],[0,23,140],[0,23,88],[0,23,136],[0,23,74],[0,23,142],[0,23,71],[0,23,124],[0,23,139],[0,23,81],[0,23,96],[0,23,475],[0,23,422],[0,23,474],[0,23,420],[0,23,70],[0,23,134],[0,24,292],[0,24,306],[0,24,456],[0,24,284],[0,24,290],[0,24,299],[0,24,287],[0,24,305],[0,24,302],[0,24,301],[0,24,308],[0,24,303],[0,24,293],[0,24,294],[0,24,457],[0,25,83],[0,25,207],[0,25,76],[0,25,92],[0,25,78],[0,25,227],[0,25,215],[0,25,229],[0,25,234],[0,25,453],[0,25,237],[0,25,514],[0,25,426],[0,25,217],[0,25,88],[0,25,95],[0,25,428],[0,25,201],[0,25,243],[0,25,221],[0,25,251],[0,25,223],[0,25,75],[0,25,79],[0,25,232],[0,25,246],[0,25,241],[0,25,242],[0,25,210],[0,25,256],[0,25,230],[0,25,252],[0,25,93],[0,25,254],[0,25,85],[0,25,208],[0,25,228],[0,25,249],[0,25,247],[0,25,218],[0,25,219],[0,25,209],[0,25,198],[0,25,259],[0,25,74],[0,25,96],[0,25,233],[0,25,455],[0,25,245],[0,25,71],[0,25,452],[0,25,422],[0,25,474],[0,25,682],[0,25,213],[0,25,112],[0,25,211],[0,25,91],[0,25,81],[0,25,239],[0,25,244],[0,25,124],[0,25,511],[0,25,212],[0,25,70],[0,25,205],[0,26,69],[0,27,590],[0,27,589],[0,27,587],[0,27,591],[0,27,592],[0,28,227],[0,28,315],[0,29,263],[0,29,231],[0,29,265],[0,29,88],[0,29,214],[0,29,238],[0,29,112],[0,29,206],[0,29,213],[0,29,216],[0,29,266],[0,30,236],[0,30,255],[0,31,214],[0,31,88],[0,31,511],[0,31,317],[0,31,316],[0,32,88],[0,32,207],[0,32,238],[0,32,216],[0,33,630],[0,33,634],[0,33,629],[0,33,621],[0,33,622],[0,33,633],[0,33,631],[0,33,635],[0,33,625],[0,33,626],[0,34,638],[0,34,591],[0,34,592],[0,35,639],[0,36,83],[0,36,460],[0,36,399],[0,36,71],[0,36,96],[0,36,76],[0,36,88],[0,36,92],[0,36,78],[0,36,77],[0,36,95],[0,36,234],[0,36,574],[0,36,514],[0,36,426],[0,36,580],[0,36,565],[0,36,575],[0,36,243],[0,36,586],[0,36,576],[0,36,85],[0,36,585],[0,36,567],[0,36,590],[0,36,577],[0,36,569],[0,36,563],[0,36,582],[0,36,583],[0,36,584],[0,36,568],[0,36,579],[0,36,578],[0,36,81],[0,36,581],[0,36,74],[0,36,422],[0,36,423],[0,36,420],[0,36,70],[0,36,8],[0,36,572],[0,36,413],[0,36,91],[0,36,239],[0,36,566],[0,37,88],[0,37,642],[0,37,640],[0,38,83],[0,38,460],[0,38,245],[0,38,71],[0,38,422],[0,38,474],[0,38,682],[0,38,213],[0,38,112],[0,38,211],[0,38,91],[0,38,81],[0,38,239],[0,38,70],[0,39,83],[0,39,460],[0,39,71],[0,39,96],[0,39,76],[0,39,88],[0,39,92],[0,39,78],[0,39,234],[0,39,574],[0,39,514],[0,39,426],[0,39,580],[0,39,565],[0,39,243],[0,39,596],[0,39,581],[0,39,74],[0,39,422],[0,39,423],[0,39,420],[0,39,70],[0,39,8],[0,39,572],[0,39,413],[0,39,91],[0,39,239],[0,41,517],[0,43,102],[0,43,101],[0,44,108],[0,44,109],[0,44,107],[0,47,17],[0,47,118],[0,49,408],[0,50,120],[0,51,449],[0,52,458],[0,53,461],[0,57,687],[0,57,167],[0,59,462],[0,60,133],[0,61,168],[0,61,169],[0,61,172],[0,62,683],[0,62,174],[0,62,172],[0,65,350],[0,66,190],[0,66,189],[0,66,188],[0,66,176],[0,66,193],[0,66,195],[0,67,463],[0,68,351],[0,70,352],[0,71,353],[0,72,353],[0,73,464],[0,73,467],[0,73,466],[0,73,465],[0,75,17],[0,75,481],[0,76,481],[0,77,482],[0,79,483],[0,80,485],[0,81,693],[0,81,684],[0,81,489],[0,81,486],[0,82,488],[0,83,225],[0,84,275],[0,85,250],[0,88,490],[0,90,422],[0,90,370],[0,90,492],[0,90,493],[0,91,496],[0,91,500],[0,91,499],[0,91,498],[0,91,495],[0,92,513],[0,94,519],[0,96,10],[0,96,531],[0,96,533],[0,98,10],[0,98,543],[0,98,529],[0,98,537],[0,98,683],[0,98,542],[0,98,532],[0,98,520],[0,98,534],[0,98,538],[0,98,417],[0,98,425],[0,98,525],[0,98,522],[0,98,541],[0,99,10],[0,99,683],[0,99,364],[0,100,529],[0,100,543],[0,100,683],[0,100,520],[0,100,534],[0,100,538],[0,100,540],[0,100,539],[0,100,406],[0,100,158],[0,100,425],[0,100,161],[0,100,541],[0,102,529],[0,102,532],[0,102,520],[0,102,521],[0,102,526],[0,102,10],[0,102,683],[0,102,425],[0,102,525],[0,103,545],[0,105,175],[0,107,546],[0,109,555],[0,109,390],[0,109,391],[0,109,387],[0,109,450],[0,109,385],[0,109,451],[0,109,383],[0,109,163],[0,110,683],[0,110,416],[0,110,166],[0,111,558],[0,112,328],[0,112,327],[0,112,17],[0,112,320],[0,112,322],[0,112,551],[0,112,324],[0,112,416],[0,112,683],[0,112,319],[0,112,325],[0,112,427],[0,112,561],[0,112,553],[0,112,692],[0,112,693],[0,112,687],[0,112,435],[0,112,330],[0,112,477],[0,112,502],[0,112,412],[0,112,557],[0,112,431],[0,112,406],[0,112,326],[0,112,323],[0,113,560],[0,114,268],[0,115,405],[0,115,559],[0,116,434],[0,116,405],[0,116,559],[0,117,271],[0,118,318],[0,119,601],[0,120,551],[0,120,599],[0,120,609],[0,120,608],[0,120,620],[0,121,614],[0,121,617],[0,121,616],[0,121,17],[0,121,553],[0,121,416],[0,121,551],[0,121,683],[0,121,597],[0,121,691],[0,121,693],[0,121,687],[0,121,403],[0,121,435],[0,121,480],[0,121,502],[0,121,479],[0,121,602],[0,121,411],[0,121,429],[0,121,598],[0,121,613],[0,121,424],[0,121,619],[0,121,610],[0,121,607],[0,121,612],[0,121,618],[0,121,615],[0,122,405],[0,122,559],[0,122,556],[0,123,416],[0,123,419],[0,124,419],[0,126,150],[0,127,655],[0,127,654],[0,127,651],[0,127,158],[0,127,406],[0,127,433],[0,127,157],[0,127,161],[0,128,310],[0,129,311],[0,129,312],[0,130,10],[0,130,528],[0,130,529],[0,130,527],[0,130,661],[0,130,650],[0,130,332],[0,130,335],[0,130,333],[0,130,658],[0,130,331],[0,130,334],[0,131,656],[0,132,10],[0,132,529],[0,132,407],[0,134,160],[0,134,162],[0,136,645],[0,136,529],[0,136,524],[0,136,650],[0,136,643],[0,136,658],[0,136,425],[0,136,525],[0,136,644],[0,137,657],[0,137,529],[0,137,524],[0,137,523],[0,137,521],[0,137,10],[0,137,407],[0,137,425],[0,137,525],[0,140,527],[0,140,652],[0,141,527],[0,141,652],[0,144,660],[0,144,17],[0,144,683],[0,147,389],[0,147,164],[0,147,165],[0,148,667],[0,148,665],[0,148,683],[0,148,17],[0,148,666],[0,148,337],[0,148,336],[0,149,668],[0,150,649],[0,151,683],[0,151,17],[0,151,690],[0,151,666],[0,151,646],[0,151,648],[0,151,647],[0,152,129],[0,152,130],[0,152,59],[0,153,129],[0,153,445],[0,155,178],[0,155,438],[0,156,187],[0,157,183],[0,157,177],[0,157,181],[0,157,194],[0,157,131],[0,157,180],[0,157,129],[0,157,130],[0,157,184],[0,157,179],[0,157,442],[0,157,191],[0,157,186],[0,157,185],[0,157,443],[0,157,440],[0,159,346],[0,160,343],[0,160,129],[0,160,130],[0,160,344],[0,160,338],[0,160,448],[0,160,355],[0,160,347],[0,160,432],[0,160,339],[0,160,342],[0,160,341],[0,160,340],[0,160,446],[0,160,447],[0,160,443],[0,160,440],[0,161,349],[0,162,345],[0,163,348],[0,163,345],[0,164,345],[0,166,505],[0,166,503],[0,166,504],[0,166,130],[0,166,129],[0,166,441],[0,166,445],[0,167,129],[0,167,441],[0,167,445],[0,167,536],[0,169,129],[0,169,130],[0,169,445],[0,171,672],[0,172,670],[0,172,671],[0,172,683],[0,177,683],[0,177,699],[0,180,708],[1,1,22],[1,1,21],[1,3,16],[1,3,3],[1,12,203],[1,13,97],[1,13,40],[1,13,98],[1,13,44],[1,13,99],[1,15,115],[1,15,114],[1,15,113],[1,15,110],[1,15,117],[1,17,549],[1,18,121],[1,19,127],[1,19,202],[1,23,47],[1,23,48],[1,23,49],[1,23,396],[1,23,197],[1,23,562],[1,23,573],[1,23,82],[1,23,222],[1,23,296],[1,23,507],[1,23,506],[1,23,508],[1,23,86],[1,23,632],[1,23,304],[1,23,146],[1,23,159],[1,23,260],[1,23,261],[1,23,552],[1,23,267],[1,28,473],[1,28,470],[1,33,544],[1,34,90],[1,35,457],[1,35,455],[1,35,460],[1,35,478],[1,35,611],[1,35,604],[1,35,600],[1,35,550],[1,35,435],[1,35,406],[1,37,653],[1,37,659],[1,39,662],[1,40,435],[1,40,32],[2,17,15],[2,46,132],[2,49,84],[2,75,73],[2,75,72],[2,76,73],[2,76,80],[2,81,122],[2,86,119],[2,93,94],[2,110,683],[2,116,117],[2,122,121],[2,124,126],[2,124,361],[2,124,414],[2,125,126],[2,126,123],[2,126,127],[2,126,128],[2,127,123],[2,142,554],[2,146,148],[2,150,366],[2,150,421],[2,152,151],[2,160,596],[2,160,593],[2,177,192],[2,181,192],[2,188,645],[2,199,200],[2,201,200],[2,203,200],[2,204,200],[2,212,698],[2,219,220],[2,219,224],[2,222,224],[2,222,220],[2,224,204],[2,231,361],[2,231,414],[2,234,226],[2,234,235],[2,242,240],[2,254,253],[2,254,203],[2,254,257],[2,255,219],[2,255,203],[2,255,248],[2,266,123],[2,266,262],[2,266,267],[2,266,269],[2,266,272],[2,266,208],[2,266,219],[2,269,270],[2,272,273],[2,272,274],[2,279,278],[2,279,288],[2,279,257],[2,280,295],[2,281,307],[2,281,203],[2,281,257],[2,285,286],[2,287,286],[2,288,286],[2,289,286],[2,290,291],[2,294,295],[2,294,297],[2,297,289],[2,301,300],[2,304,309],[2,308,307],[2,308,288],[2,308,257],[2,312,356],[2,312,407],[2,315,314],[2,315,203],[2,315,257],[2,316,220],[2,317,253],[2,317,203],[2,317,257],[2,335,356],[2,335,407],[2,357,531],[2,357,533],[2,357,487],[2,363,484],[2,366,470],[2,367,470],[2,368,470],[2,373,84],[2,374,530],[2,378,182],[2,381,149],[2,383,530],[2,386,676],[2,387,386],[2,390,388],[2,391,389],[2,393,394],[2,398,310],[2,401,637],[2,408,531],[2,408,533],[2,408,487],[2,417,484],[2,420,470],[2,421,471],[2,422,470],[2,423,470],[2,428,84],[2,429,530],[2,438,182],[2,449,149],[2,452,392],[2,453,394],[2,453,393],[2,455,395],[2,457,395],[2,458,310],[2,459,16],[2,460,400],[2,461,637],[2,470,468],[2,470,469],[2,471,468],[2,471,469],[2,472,468],[2,472,469],[2,473,468],[2,474,470],[2,475,480],[2,475,476],[2,477,478],[2,480,478],[2,485,362],[2,492,122],[2,498,122],[2,504,371],[2,509,510],[2,511,512],[2,511,509],[2,516,569],[2,516,85],[2,516,235],[2,516,250],[2,516,123],[2,516,127],[2,516,361],[2,516,414],[2,516,203],[2,517,518],[2,517,475],[2,517,472],[2,517,71],[2,517,516],[2,517,81],[2,518,324],[2,539,421],[2,539,366],[2,540,367],[2,565,564],[2,569,570],[2,571,570],[2,578,430],[2,578,375],[2,581,122],[2,587,588],[2,593,594],[2,596,595],[2,600,358],[2,601,605],[2,603,605],[2,604,606],[2,612,122],[2,618,122],[2,622,623],[2,626,627],[2,628,627],[2,632,636],[2,633,624],[2,640,641],[2,654,421],[2,654,366],[2,655,367],[2,662,663],[2,663,663],[2,674,676],[2,675,674],[2,679,677],[2,680,677],[2,681,678],[2,683,669],[2,684,669],[2,698,697],[3,0,42],[3,0,40],[3,1,100]],"sysrefs":[["form:Locko_Program.Form","Program/ProgramServiceType","FormMetadata.CustomViewName"],["form:Locko_Vehicle.View","Vehicle/PrintActButton","FormMetadata.CustomViewName"],["controller:Locko.ELMA.Credit.Web/Application","Application/PercentageValue","Controller.View/PartialView"],["controller:Locko.ELMA.Credit.Web/Application","Filter/FilterTree","Controller.View/PartialView"],["controller:Locko.ELMA.Credit.Web/Workplace","Workplace/Index","Controller.View/PartialView"],["view:Locko.ELMA.Common.Web|Shared/Locko_Branch/FilterLockoBranch","Filter.Region","Html.Partial"],["view:Locko.ELMA.Common.Web|Shared/PropertyLoader/PropertyList","DisplayTemplates/Entity","Html.Partial"],["view:Locko.ELMA.Common.Web|Shared/PropertyLoader/PropertyList","EditorTemplates/Entity","Html.Partial"],["view:Locko.ELMA.Credit.Web|Application/ApplicationPortlet","Filter/FilterModel","Html.Partial"],["view:Locko.ELMA.Credit.Web|Application/ApplicationPortletGrid","DisplayTemplates/Entity","Html.Partial"],["view:Locko.ELMA.Credit.Web|Shared/Application/-MaxPercentage","Application/PercentageValue","Html.Partial"],["view:Locko.ELMA.Credit.Web|Shared/ApplicationPortletStoredProcedure/ApplicationPortlet","Filter/FilterModel","Html.Partial"],["view:Locko.ELMA.Credit.Web|Shared/CreditManager/ApplicationForm/AdditionalProductCollection","EntityCollection/EntityCollection","Html.Partial"],["view:Locko.ELMA.Credit.Web|Shared/CreditManager/CreditManagerAutocreditForm/DecisionSuggestionInfo","CreditManager/CreditManagerAutocreditForm/","Html.Partial"],["view:Locko.ELMA.Credit.Web|Shared/DisplayTemplates/UnderwritingFile/UnderwritingDocumentType","DisplayTemplates/Entity","Html.Partial"],["view:Locko.ELMA.Credit.Web|Shared/EditorTemplates/Contracts/ContractDate","DisplayTemplates/DateTime","Html.Partial"],["view:Locko.ELMA.Credit.Web|Shared/EditorTemplates/Contracts/ContractDate","EditorTemplates/DateTime","Html.Partial"],["view:Locko.ELMA.Credit.Web|Shared/EditorTemplates/Contracts/CreditContract_ContractDate","DisplayTemplates/DateTime","Html.Partial"],["view:Locko.ELMA.Credit.Web|Shared/EditorTemplates/Contracts/CreditContract_ContractDate","EditorTemplates/DateTime","Html.Partial"],["view:Locko.ELMA.Credit.Web|Shared/EditorTemplates/Contracts/Number","EditorTemplates/String","Html.Partial"],["view:Locko.ELMA.Credit.Web|Shared/EditorTemplates/Contracts/Number","DisplayTemplates/String","Html.Partial"],["view:Locko.ELMA.Credit.Web|Shared/EditorTemplates/Entities/TransactionRole","DisplayTemplates/Entity","Html.Partial"],["view:Locko.ELMA.Credit.Web|Shared/File/FileUploader","Folder/UploadInfoPopup","Html.Partial"],["view:Locko.ELMA.Credit.Web|Shared/Underwriter/ApplicationForm/AdditionalProductCollection","EntityCollection/EntityCollection","Html.Partial"],["view:Locko.ELMA.Credit.Web|Shared/WorflowInstanceHistory/WorkflowInstancePart","User/Photo","Html.Partial"],["view:Locko.ELMA.Credit.Web|Shared/WorflowInstanceHistory/WorkflowInstancePart","DisplayTemplates/Entities/User","Html.Partial"],["view:Locko.ELMA.CRM.Web|Shared/Address/AddressContent","~/Modules/EleWise.ELMA.CRM.Web/Views/Shared/EditorTemplates/Entities/Address.cshtml","Html.Partial"],["view:Locko.ELMA.CRM.Web|Shared/EditorTemplates/TextBoxContractorLegalCreator","EditorTemplates/String","Html.Partial"],["view:Locko.ELMA.CRM.Web|Shared/EditorTemplates/TextBoxContractorLegalCreator","CreateEntityInTextBox","Html.Partial"],["view:Locko.ELMA.CRM.Web|Shared/EditorTemplates/LockoContact/LockoContact","Phone.CallResult","Html.Partial"],["view:Locko.ELMA.CRM.Web|Shared/EditorTemplates/LockoPhone/LockoPhoneCheck","ConfirmationCodeResult","Html.Partial"],["view:Locko.ELMA.CRM.Web|Shared/LockoContractPhone/ContractPhoneCheck","ConfirmationCodeResult","Html.Partial"],["view:Locko.ELMA.CRM.Web|Shared/PointOfSale/PointOfSaleEdit","HistoryParts/ContractorEditedProperties","Html.Partial"]],"stats":{"views":709,"forms":182,"controllers":50,"portlets":2,"adjustments":9,"edges":911,"formEdges":643,"ctrlEdges":60,"viewEdges":205,"portletEdges":3,"sysrefs":33}};
+const NODE_W = 240, NODE_H = 18, ROW_H = 22, RANK_GAP = 130, PAD = 16, HEADER_H = 30;
+const shortMod = (m) => m.replace("Locko.ELMA.", "");
+const viewRel = (idx) => DATA.views[idx][1].replace(/^Shared\//, "");
+const viewModule = (idx) => DATA.modules[DATA.views[idx][0]];
+const kindName = { form: "Форма", ctrl: "Контроллер", port: "Портлет", view: "Вьюха" };
+
+function buildEdgeMap(kind) {
+  const m = new Map();
+  for (const [k, f, t] of DATA.edges) {
+    if (k !== kind) continue;
+    const arr = m.get(f);
+    if (arr) arr.push(t); else m.set(f, [t]);
+  }
+  return m;
+}
+const formViewMap = buildEdgeMap(0);
+const ctrlViewMap = buildEdgeMap(1);
+const viewChildMap = buildEdgeMap(2);
+const portViewMap = buildEdgeMap(3);
+
+function bezier(x1, y1, x2, y2) {
+  const dx = Math.max(40, Math.abs(x2 - x1) * 0.45);
+  const dir = x2 >= x1 ? 1 : -1;
+  return "M" + x1 + "," + y1 + " C" + (x1 + dir * dx) + "," + y1 + " " + (x2 - dir * dx) + "," + y2 + " " + x2 + "," + y2;
+}
+
+const LAYOUT = (() => {
+  const start = new Set();
+  for (const [, vs] of formViewMap) vs.forEach(v => start.add(v));
+  for (const [, vs] of ctrlViewMap) vs.forEach(v => start.add(v));
+  for (const [, vs] of portViewMap) vs.forEach(v => start.add(v));
+  const depth = new Map();
+  const bfsQ = [];
+  for (const v of start) { depth.set(v, 0); bfsQ.push(v); }
+  while (bfsQ.length) {
+    const cur = bfsQ.shift();
+    const d = depth.get(cur);
+    for (const c of viewChildMap.get(cur) || []) {
+      if (!depth.has(c)) { depth.set(c, d + 1); bfsQ.push(c); }
+    }
+  }
+  const unreached = [];
+  for (let i = 0; i < DATA.views.length; i++) if (!depth.has(i)) unreached.push(i);
+  const orphanRoots = unreached.filter(i => (viewChildMap.get(i) || []).length > 0);
+  const orphanSet = new Set(orphanRoots);
+  const orphanChildDepth = new Map();
+  const oq = [];
+  for (const r of orphanRoots) { orphanChildDepth.set(r, -1); oq.push(r); }
+  while (oq.length) {
+    const cur = oq.shift();
+    for (const c of viewChildMap.get(cur) || []) {
+      if (!depth.has(c) && !orphanChildDepth.has(c)) { orphanChildDepth.set(c, 0); oq.push(c); }
+    }
+  }
+  const orphanChildren = [...orphanChildDepth.keys()].filter(i => !orphanSet.has(i));
+  const orphanChildSet = new Set(orphanChildren);
+  const isolated = unreached.filter(i => !orphanSet.has(i) && !orphanChildSet.has(i));
+
+  const fid = (i) => "f" + i;
+  const cid = (i) => "c" + i;
+  const pid = (i) => "p" + i;
+  const vid = (i) => "v" + i;
+
+  const outAdj = new Map();
+  const inAdj = new Map();
+  const pushAdj = (m, k, v) => { const a = m.get(k); if (a) a.push(v); else m.set(k, [v]); };
+  const edgePairs = [];
+  for (const [k, f, t] of DATA.edges) {
+    const from = k === 0 ? fid(f) : k === 1 ? cid(f) : k === 2 ? vid(f) : pid(f);
+    const to = vid(t);
+    edgePairs.push([from, to]);
+    pushAdj(outAdj, from, to);
+    pushAdj(inAdj, to, from);
+  }
+
+  const formIds = DATA.forms.map((_, i) => i).filter(i => (formViewMap.get(i) || []).length > 0);
+  const ctrlIds = DATA.controllers.map((_, i) => i).filter(i => (ctrlViewMap.get(i) || []).length > 0);
+  const portIds = DATA.portlets.map((_, i) => i).filter(i => (portViewMap.get(i) || []).length > 0);
+  const initiatorIds = [
+    ...formIds.sort((a, b) => (DATA.forms[a][0] + "." + DATA.forms[a][1]).localeCompare(DATA.forms[b][0] + "." + DATA.forms[b][1])).map(fid),
+    ...ctrlIds.sort((a, b) => DATA.controllers[a][0].localeCompare(DATA.controllers[b][0])).map(cid),
+    ...portIds.map(pid),
+  ];
+  const depthCols = [];
+  for (const [v, d] of depth) {
+    if (!depthCols[d]) depthCols[d] = [];
+    depthCols[d].push(v);
+  }
+  const maxDepth = depthCols.length - 1;
+  const orphanRootIds = [...orphanRoots].sort((a, b) => viewRel(a).localeCompare(viewRel(b)));
+  const isolatedIds = [...isolated].sort((a, b) => viewRel(a).localeCompare(viewRel(b)));
+
+  const rankTitles = [
+    "Инициаторы (" + initiatorIds.length + ")",
+    ...depthCols.map((col, d) => "Вьюхи · глубина " + d + " (" + col.length + ")"),
+    "Корни без входа (" + orphanRootIds.length + ")",
+    "Их потомки (" + orphanChildren.length + ")",
+    "Изолированные (" + isolatedIds.length + ")",
+  ];
+
+  const yPos = new Map();
+  const colMembers = new Map();
+  colMembers.set(0, [...initiatorIds]);
+  depthCols.forEach((col, d) =>
+    colMembers.set(d + 1, [...col].sort((a, b) => viewRel(a).localeCompare(viewRel(b))).map(vid)));
+  colMembers.set(maxDepth + 2, orphanRootIds.map(vid));
+  colMembers.set(maxDepth + 3, orphanChildren.map(vid));
+  colMembers.set(maxDepth + 4, isolatedIds.map(vid));
+
+  const assignY = () => {
+    for (const [, members] of colMembers) members.forEach((id, i) => yPos.set(id, HEADER_H + PAD + i * ROW_H));
+  };
+  assignY();
+  const baryPass = (rank, neighbors) => {
+    const members = colMembers.get(rank);
+    if (!members) return;
+    const score = new Map();
+    members.forEach((id, i) => {
+      const ys = neighbors(id).map(n => yPos.get(n)).filter(y => y !== undefined);
+      score.set(id, ys.length ? ys.reduce((a, c) => a + c, 0) / ys.length : i * ROW_H);
+    });
+    colMembers.set(rank, [...members].sort((a, b) => score.get(a) - score.get(b)));
+    assignY();
+  };
+  for (let pass = 0; pass < 2; pass++) {
+    for (let r = 1; r <= maxDepth + 3; r++) baryPass(r, id => inAdj.get(id) || []);
+    baryPass(0, id => outAdj.get(id) || []);
+  }
+
+  const nodes = [];
+  const nodeById = new Map();
+  const xOf = (rank) => PAD + rank * (NODE_W + RANK_GAP);
+  const mkNode = (id, kind, label, module, rank) => {
+    const n = { id, kind, label, module, rank, x: xOf(rank), y: yPos.get(id), w: NODE_W, h: NODE_H };
+    nodes.push(n); nodeById.set(id, n);
+  };
+  formIds.forEach(i => mkNode(fid(i), "form", DATA.forms[i][0] + "." + DATA.forms[i][1], shortMod(DATA.modules[DATA.forms[i][2]]), 0));
+  ctrlIds.forEach(i => mkNode(cid(i), "ctrl", DATA.controllers[i][0] + "Controller", shortMod(DATA.modules[DATA.controllers[i][1]]), 0));
+  portIds.forEach(i => mkNode(pid(i), "port", DATA.portlets[i][0], shortMod(DATA.modules[DATA.portlets[i][1]]), 0));
+  depthCols.forEach((col, d) => col.forEach(v => mkNode(vid(v), "view", viewRel(v), shortMod(viewModule(v)), d + 1)));
+  orphanRootIds.forEach(v => mkNode(vid(v), "view", viewRel(v), shortMod(viewModule(v)), maxDepth + 2));
+  orphanChildren.forEach(v => mkNode(vid(v), "view", viewRel(v), shortMod(viewModule(v)), maxDepth + 3));
+  isolatedIds.forEach(v => mkNode(vid(v), "view", viewRel(v), shortMod(viewModule(v)), maxDepth + 4));
+
+  const edges = edgePairs.map(([from, to]) => {
+    const a = nodeById.get(from);
+    const b = nodeById.get(to);
+    const key = from + "->" + to;
+    const y1 = a.y + a.h / 2;
+    const y2 = b.y + b.h / 2;
+    if (from === to) return { key, from, to, d: "M" + (a.x + a.w) + "," + y1 + " c 30,-14 30,14 0," + (a.h * 0.9), self: true };
+    const dx = Math.max(40, Math.abs(b.x - (a.x + a.w)) * 0.45);
+    return { key, from, to, d: "M" + (a.x + a.w) + "," + y1 + " C" + (a.x + a.w + dx) + "," + y1 + " " + (b.x - dx) + "," + y2 + " " + b.x + "," + y2, self: false };
+  });
+
+  let maxY = 0;
+  for (const [, members] of colMembers) maxY = Math.max(maxY, HEADER_H + PAD + members.length * ROW_H);
+  const totalRanks = maxDepth + 5;
+  const width = PAD * 2 + totalRanks * NODE_W + (totalRanks - 1) * RANK_GAP;
+  const height = maxY + PAD;
+  return { nodes, edges, nodeById, outAdj, inAdj, rankTitles, xOf, width, height, maxDepth };
+})();
+
+function computeChain(selected) {
+  const nodes = new Set([selected]);
+  const up = [selected];
+  while (up.length) {
+    const cur = up.shift();
+    for (const f of LAYOUT.inAdj.get(cur) || []) if (!nodes.has(f)) { nodes.add(f); up.push(f); }
+  }
+  const down = [selected];
+  while (down.length) {
+    const cur = down.shift();
+    for (const t of LAYOUT.outAdj.get(cur) || []) if (!nodes.has(t)) { nodes.add(t); down.push(t); }
+  }
+  const edges = new Set();
+  for (const e of LAYOUT.edges) if (nodes.has(e.from) && nodes.has(e.to)) edges.add(e.key);
+  return { nodes, edges };
+}
+
+function chainInfoOf(chain, selected) {
+  const initiators = [];
+  const views = [];
+  for (const id of chain.nodes) {
+    if (id === selected) continue;
+    if (id[0] === "v") views.push(id); else initiators.push(id);
+  }
+  const leaves = views.filter(id => (LAYOUT.outAdj.get(id) || []).filter(t => chain.nodes.has(t)).length === 0);
+  const byLabel = (a, b) => (LAYOUT.nodeById.get(a).label).localeCompare(LAYOUT.nodeById.get(b).label);
+  return {
+    initiators: initiators.sort(byLabel),
+    leaves: leaves.sort(byLabel),
+    forms: initiators.filter(id => id[0] === "f").length,
+    ctrls: initiators.filter(id => id[0] === "c").length,
+    ports: initiators.filter(id => id[0] === "p").length,
+    viewsCount: views.length,
+  };
+}
+
+function computeChainLayout(chain, untangled) {
+  const byRank = new Map();
+  for (const id of chain.nodes) {
+    const n = LAYOUT.nodeById.get(id);
+    if (!n) continue;
+    const arr = byRank.get(n.rank);
+    if (arr) arr.push(id); else byRank.set(n.rank, [id]);
+  }
+  for (const [, arr] of byRank) arr.sort((a, b) => LAYOUT.nodeById.get(a).y - LAYOUT.nodeById.get(b).y);
+  const cy = new Map();
+  const assign = () => { for (const [, arr] of byRank) arr.forEach((id, i) => cy.set(id, HEADER_H + PAD + i * ROW_H)); };
+  assign();
+  const neighbors = (id) => [...(LAYOUT.inAdj.get(id) || []), ...(LAYOUT.outAdj.get(id) || [])].filter(x => chain.nodes.has(x));
+  for (let pass = 0; pass < 3; pass++) {
+    for (const [, arr] of byRank) {
+      const score = new Map();
+      arr.forEach((id, i) => {
+        const ys = neighbors(id).map(x => cy.get(x)).filter(y => y !== undefined);
+        score.set(id, ys.length ? ys.reduce((a, c) => a + c, 0) / ys.length : i * ROW_H);
+      });
+      arr.sort((a, b) => score.get(a) - score.get(b));
+    }
+    assign();
+  }
+  const baseEdges = () => LAYOUT.edges.filter(e => chain.edges.has(e.key)).map(e => {
+    const a = LAYOUT.nodeById.get(e.from);
+    const b = LAYOUT.nodeById.get(e.to);
+    const y1 = cy.get(e.from) + a.h / 2;
+    const y2 = cy.get(e.to) + b.h / 2;
+    if (e.self || e.from === e.to) {
+      return { key: e.key, d: "M" + (a.x + a.w) + "," + y1 + " c 30,-14 30,14 0," + (a.h * 0.9) };
+    }
+    if (a.rank === b.rank) return { key: e.key, d: bezier(a.x + a.w, y1, b.x + b.w, y2) };
+    const left = a.rank <= b.rank ? a : b;
+    const right = a.rank <= b.rank ? b : a;
+    const ly = a.rank <= b.rank ? y1 : y2;
+    const ry = a.rank <= b.rank ? y2 : y1;
+    return { key: e.key, d: bezier(left.x + left.w, ly, right.x, ry) };
+  });
+  if (!untangled) {
+    let maxCount = 0;
+    for (const [, arr] of byRank) maxCount = Math.max(maxCount, arr.length);
+    return {
+      cy, edges: baseEdges(), height: HEADER_H + PAD + maxCount * ROW_H + PAD,
+      usedRanks: new Set(byRank.keys()), width: LAYOUT.width, copies: null, duplicateCount: 0,
+    };
+  }
+
+  const yOf = (id) => LAYOUT.nodeById.get(id).y;
+  const rankOf = (id) => LAYOUT.nodeById.get(id).rank;
+  const outgoing = new Map();
+  const indeg = new Map();
+  const selfOf = new Set();
+  for (const e of LAYOUT.edges) {
+    if (!chain.edges.has(e.key)) continue;
+    if (e.self || e.from === e.to) { selfOf.add(e.from); continue; }
+    const ra = rankOf(e.from), rb = rankOf(e.to);
+    const from = ra <= rb ? e.from : e.to;
+    const to = ra <= rb ? e.to : e.from;
+    const list = outgoing.get(from);
+    if (list) list.push({ key: e.key, to }); else outgoing.set(from, [{ key: e.key, to }]);
+    indeg.set(to, (indeg.get(to) || 0) + 1);
+  }
+  for (const list of outgoing.values()) list.sort((a, b) => yOf(a.to) - yOf(b.to));
+
+  const raw = [];
+  const atRank = new Map();
+  const byKey = new Map();
+  let seq = 0;
+  const addCopy = (orig, rank, parent) => {
+    const c = { key: "d" + (seq++), orig, rank, parent };
+    raw.push(c);
+    const list = atRank.get(rank);
+    if (list) list.push(c); else atRank.set(rank, [c]);
+    byKey.set(c.key, c);
+    return c;
+  };
+  const seeds = [...chain.nodes].filter(id => !indeg.get(id)).sort((a, b) => yOf(a) - yOf(b) || rankOf(a) - rankOf(b));
+  for (const id of seeds) addCopy(id, rankOf(id), null);
+  const drawEdges = [];
+  const selfDrawn = new Set();
+  const MAX_COPIES = 500;
+  const ancestorOrig = (key, orig) => {
+    let k = key;
+    const seen = new Set();
+    while (k && !seen.has(k)) {
+      seen.add(k);
+      const c = byKey.get(k);
+      if (!c) return null;
+      if (c.orig === orig) return k;
+      k = c.parent;
+    }
+    return null;
+  };
+  for (let r = 0; r <= 16 && raw.length < MAX_COPIES; r++) {
+    const list = atRank.get(r);
+    if (!list && r > 8) break;
+    for (const c of [...(list || [])]) {
+      if (selfOf.has(c.orig) && !selfDrawn.has(c.orig)) {
+        selfDrawn.add(c.orig);
+        drawEdges.push({ key: "self-" + c.key, from: c.key, to: c.key, self: true });
+      }
+      for (const e of outgoing.get(c.orig) || []) {
+        const back = ancestorOrig(c.key, e.to);
+        if (back && back !== c.key) {
+          drawEdges.push({ key: e.key + "@" + c.key, from: c.key, to: back, self: false });
+          continue;
+        }
+        if (raw.length >= MAX_COPIES) continue;
+        const child = addCopy(e.to, r + 1, c.key);
+        drawEdges.push({ key: e.key + "@" + child.key, from: c.key, to: child.key, self: false });
+      }
+    }
+  }
+  const dupTotal = new Map();
+  for (const c of raw) dupTotal.set(c.orig, (dupTotal.get(c.orig) || 0) + 1);
+  const dupSeen = new Map();
+  let maxRank = 0, maxRows = 0;
+  for (const [r, list] of atRank) { maxRank = Math.max(maxRank, r); maxRows = Math.max(maxRows, list.length); }
+  const copies = raw.map(c => {
+    const list = atRank.get(c.rank);
+    const row = list.indexOf(c);
+    const seen = (dupSeen.get(c.orig) || 0) + 1;
+    dupSeen.set(c.orig, seen);
+    const src = LAYOUT.nodeById.get(c.orig);
+    return {
+      key: c.key, orig: c.orig, rank: c.rank,
+      x: LAYOUT.xOf(c.rank), y: HEADER_H + PAD + row * ROW_H,
+      w: src.w, h: src.h, dupIndex: seen, dupTotal: dupTotal.get(c.orig) || 1,
+    };
+  });
+  const copyPos = new Map(copies.map(c => [c.key, c]));
+  for (const id of chain.nodes) {
+    const first = copies.find(c => c.orig === id);
+    if (first) cy.set(id, first.y);
+  }
+  const eds = [];
+  for (const e of drawEdges) {
+    const a = copyPos.get(e.from);
+    const b = copyPos.get(e.to);
+    if (!a || !b) continue;
+    const y1 = a.y + a.h / 2, y2 = b.y + b.h / 2;
+    eds.push({
+      key: e.key,
+      d: e.self
+        ? "M" + (a.x + a.w) + "," + y1 + " c 30,-14 30,14 0," + (a.h * 0.9)
+        : bezier(a.x + a.w, y1, b.x, y2),
+    });
+  }
+  return {
+    cy, edges: eds, height: HEADER_H + PAD + maxRows * ROW_H + PAD,
+    usedRanks: new Set(atRank.keys()), width: LAYOUT.xOf(maxRank) + NODE_W + PAD,
+    copies, duplicateCount: copies.filter(c => c.dupIndex > 1).length,
+    links: drawEdges.map(e => ({ from: e.from, to: e.to, self: e.self })),
+  };
+}
+
+function crossingsOf(layout) {
+  if (!layout.copies) return null;
+  const pos = new Map(layout.copies.map(c => [c.key, c]));
+  let cross = 0;
+  const fwd = layout.edges;
+  return { copies: layout.copies.length, extra: layout.duplicateCount, cross, edges: fwd.length, posSize: pos.size };
+}
+
+const state = { scale: 0.5, selected: null, untangled: false, query: "" };
+let lastScrolled = null;
+
+function trunc(s, n) { return s.length > n ? s.slice(0, n - 1) + "…" : s; }
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function nodeFill(n) {
+  if (n.kind === "form") return "#dae8fc";
+  if (n.kind === "ctrl") return "#d5e8d4";
+  if (n.kind === "port") return "#fff2cc";
+  if (n.rank >= LAYOUT.maxDepth + 2) return "#f7f7f5";
+  return n.rank === 1 ? "#eef1f4" : "#e4e7ec";
+}
+function barColor(n) {
+  if (n.kind === "form") return "#6c8ebf";
+  if (n.kind === "ctrl") return "#82b366";
+  if (n.kind === "port") return "#d6b656";
+  return null;
+}
+
+function svgEl(name, attrs) {
+  const el = document.createElementNS("http://www.w3.org/2000/svg", name);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  return el;
+}
+
+function render() {
+  const root = document.getElementById("app");
+  const prev = document.querySelector(".scroll");
+  const sl = prev ? prev.scrollLeft : 0;
+  const st = prev ? prev.scrollTop : 0;
+  const qEl = document.getElementById("q");
+  const focused = qEl && document.activeElement === qEl;
+  const caret = focused ? qEl.selectionStart : 0;
+
+  const q = state.query.trim().toLowerCase();
+  const matches = q
+    ? LAYOUT.nodes.filter(n => n.label.toLowerCase().includes(q)).sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label))
+    : [];
+  const matchSet = new Set(matches.map(m => m.id));
+  const chain = state.selected ? computeChain(state.selected) : null;
+  const info = chain ? chainInfoOf(chain, state.selected) : null;
+  const chainLayout = chain ? computeChainLayout(chain, state.untangled) : null;
+  const sel = state.selected ? LAYOUT.nodeById.get(state.selected) : null;
+  const s = DATA.stats;
+  const width = chainLayout ? chainLayout.width : LAYOUT.width;
+  const height = chainLayout ? chainLayout.height : LAYOUT.height;
+
+  const scaleBtns = [0.15, 0.3, 0.5, 0.75, 1].map(z =>
+    '<button type="button" class="pill' + (state.scale === z ? " active" : "") + '" data-act="scale" data-z="' + z + '">' + Math.round(z * 100) + '%</button>'
+  ).join("");
+
+  const hits = !state.selected && matches.length
+    ? '<div class="results">' + matches.slice(0, 12).map(m =>
+      '<div class="hit" role="button" tabindex="0" data-act="hit" data-id="' + m.id + '"><span class="kind">' + kindName[m.kind] + '</span><span class="mono grow">' + esc(m.label) + '</span><span class="dim">' + esc(m.module) + '</span></div>'
+    ).join("") + "</div>"
+    : (q && !matches.length ? '<div class="dim">Ничего не найдено — поиск идёт только по узлам диаграммы.</div>' : "");
+
+  const callout = chain && info
+    ? '<div class="callout">Режим цепочки: показаны только узлы, связанные с выбранным — ' + chain.nodes.size + ' из ' + LAYOUT.nodes.length +
+      ' узлов и ' + chain.edges.size + ' из ' + LAYOUT.edges.length + ' связей; остальные скрыты, видимые подтянуты вверх. ' +
+      'В цепочке: ' + info.forms + ' форм, ' + info.ctrls + ' контроллеров, ' + info.ports + ' портлетов, ' +
+      info.viewsCount + ' вьюх, ' + info.leaves.length + ' конечных вьюх. ' +
+      (state.untangled
+        ? "Размотано копиями узлов: " + chainLayout.duplicateCount + " дополнительных копий, каждая связь идёт в свою копию."
+        : "«Разматать связи» размножает узлы: у каждого входа своя копия, и кривые идут рядом.") +
+      " Сброс: кнопка, клик по фону или Esc.</div>"
+    : "";
+
+  const sideSel = sel && info ? (
+    '<section class="card"><h2>Выбранный узел <span class="dim">' + kindName[sel.kind] + '</span></h2><div class="body">' +
+    '<div class="mono" style="word-break:break-all;font-weight:600">' + esc(sel.label) + '</div>' +
+    '<div class="dim" style="margin:4px 0 8px">' + esc(sel.module) + '</div>' +
+    (info.initiators.length ? '<div class="dim" style="margin-bottom:4px">Инициаторы в цепочке (' + info.initiators.length + ')</div><div class="list">' +
+      info.initiators.map(id => '<div class="link" role="button" tabindex="0" data-act="choose" data-id="' + id + '">' + esc(trunc(LAYOUT.nodeById.get(id).label, 40)) + '</div>').join("") +
+      '</div>' : "") +
+    (info.leaves.length ? '<div class="dim" style="margin:8px 0 4px">Конечные вьюхи (' + info.leaves.length + ')</div><div class="list">' +
+      info.leaves.map(id => '<div class="link" role="button" tabindex="0" data-act="choose" data-id="' + id + '">' + esc(trunc(LAYOUT.nodeById.get(id).label, 40)) + '</div>').join("") +
+      '</div>' : "") +
+    '<button type="button" class="btn" data-act="reset" style="margin-top:10px">Сбросить — показать всё</button></div></section>'
+  ) : "";
+
+  root.innerHTML =
+    '<div class="wrap">' +
+    '<div><h1>Полная диаграмма связей: формы метаданных → вьюхи Locko</h1>' +
+    '<p class="muted">Поиск по узлам. Клик по узлу оставляет только цепочку от инициаторов до конечных вьюх, остальное скрывается. Системные вьюхи платформы (EleWise.*) не входят. Файл открывается с диска, сервер не нужен.</p></div>' +
+    '<div class="stats">' +
+    stat(LAYOUT.nodes.length, "Узлов на диаграмме") + stat(s.edges, "Связей") + stat(s.forms, "Форм всего") +
+    stat(s.views, "Вьюх всего") + stat(LAYOUT.maxDepth, "Макс. глубина") +
+    '</div>' +
+    '<div class="controls"><input id="q" type="search" placeholder="Поиск узла: имя формы, контроллера или вьюхи…" value="' + esc(state.query) + '">' +
+    (q ? '<span class="dim">' + matches.length + ' совпадений' + (matches.length > 12 ? " · показаны первые 12" : "") + '</span>' : "") +
+    '<span class="spacer"></span><span class="dim">Масштаб:</span>' + scaleBtns +
+    (chain ? '<button type="button" class="pill' + (state.untangled ? " active" : "") + '" data-act="untangle">' + (state.untangled ? "Убрать дубли" : "Разматать связи") + '</button>' : "") +
+    (state.selected ? '<button type="button" class="btn primary" data-act="reset">Сбросить выделение — показать всё</button>' : "") +
+    '</div>' + hits + callout +
+    '<div class="main"><div class="scroll"></div><div class="side">' +
+    '<section class="card"><h2>Легенда</h2><div class="body legend">' +
+    legend("#dae8fc", "#6c8ebf", "Инициаторы: формы метаданных") +
+    legend("#d5e8d4", "#82b366", "Инициаторы: контроллеры") +
+    legend("#fff2cc", "#d6b656", "Инициаторы: портлеты") +
+    legend("#eef1f4", null, "Вьюха · глубина 0") +
+    legend("#e4e7ec", null, "Вьюха · глубина 1–2") +
+    legend("#f7f7f5", null, "Вьюха без связи от инициаторов") +
+    '</div></section>' + sideSel +
+    '<div class="note">50 форм и 34 контроллера без ссылок на вьюхи Locko не показаны. 123 вьюхи недостижимы от инициаторов: 23 корня с потомками и 97 изолированных. Одна вьюха рекурсивна: WorflowInstanceHistory/WorkflowInstancePart.</div>' +
+    '</div></div></div>';
+
+  const host = root.querySelector(".scroll");
+  const svg = svgEl("svg", {
+    width: width * state.scale, height: height * state.scale,
+    viewBox: "0 0 " + width + " " + height, role: "img",
+  });
+  svg.appendChild(svgEl("rect", { x: 0, y: 0, width, height, fill: "transparent", "data-act": "reset" }));
+  const headers = chainLayout && chainLayout.copies
+    ? [...chainLayout.usedRanks].sort((a, b) => a - b).map(r => ({ r, t: r === 0 ? "Инициаторы" : (LAYOUT.rankTitles[r] || ("Копии · шаг " + r)) }))
+    : LAYOUT.rankTitles.map((t, r) => ({ r, t })).filter(h => !chainLayout || chainLayout.usedRanks.has(h.r));
+  for (const h of headers) {
+    const text = svgEl("text", { x: LAYOUT.xOf(h.r), y: 18, "font-size": 11, "font-weight": 600, fill: "#6b6b6b" });
+    text.textContent = h.t;
+    svg.appendChild(text);
+  }
+  const edgeList = chainLayout ? chainLayout.edges : LAYOUT.edges;
+  for (const e of edgeList) {
+    svg.appendChild(svgEl("path", {
+      d: e.d, fill: "none",
+      stroke: chainLayout ? "#2f6fad" : "#b3b3b3",
+      "stroke-width": chainLayout ? 1.6 : 0.7,
+      opacity: chainLayout ? 0.95 : 0.28,
+    }));
+  }
+  if (chainLayout && chainLayout.copies) {
+    for (const c of chainLayout.copies) {
+      const n = LAYOUT.nodeById.get(c.orig);
+      svg.appendChild(nodeGroup(n, c.x, c.y, state.selected === c.orig, false, c.dupIndex > 1, c.dupTotal > 1 ? n.label + " ·" + c.dupIndex : n.label, "copy", c.orig,
+        kindName[n.kind] + " · " + n.label + (c.dupTotal > 1 ? " · копия " + c.dupIndex + " из " + c.dupTotal : "") + " · " + n.module));
+    }
+  } else {
+    for (const n of LAYOUT.nodes) {
+      if (chain && !chain.nodes.has(n.id)) continue;
+      const ny = chainLayout ? chainLayout.cy.get(n.id) : n.y;
+      const orphan = n.kind === "view" && n.rank >= LAYOUT.maxDepth + 2;
+      svg.appendChild(nodeGroup(n, n.x, ny, state.selected === n.id, !state.selected && matchSet.has(n.id), orphan, n.label, "choose", n.id,
+        kindName[n.kind] + " · " + n.label + " · " + n.module));
+    }
+  }
+  host.appendChild(svg);
+
+  if (state.selected && state.selected !== lastScrolled && sel) {
+    const ny = chainLayout ? chainLayout.cy.get(state.selected) : sel.y;
+    host.scrollLeft = Math.max(0, (sel.x + sel.w / 2) * state.scale - host.clientWidth / 2);
+    host.scrollTop = Math.max(0, (ny + sel.h / 2) * state.scale - host.clientHeight / 2);
+    lastScrolled = state.selected;
+  } else {
+    host.scrollLeft = sl;
+    host.scrollTop = st;
+  }
+  const input = document.getElementById("q");
+  input.addEventListener("input", () => { state.query = input.value; render(); });
+  if (focused) { input.focus(); input.setSelectionRange(caret, caret); }
+}
+
+function stat(value, label) {
+  return '<div class="stat"><b>' + value + '</b><span>' + label + '</span></div>';
+}
+function legend(fill, bar, label) {
+  return '<div class="leg"><svg width="26" height="12"><rect x="0" y="0" width="26" height="12" rx="2" fill="' + fill + '" stroke="#d0d0d0" stroke-width="0.7"/>' +
+    (bar ? '<rect x="0" y="0" width="4" height="12" fill="' + bar + '"/>' : "") +
+    '</svg><span>' + label + '</span></div>';
+}
+function nodeGroup(n, x, y, isSel, isMatch, dashed, label, act, id, title) {
+  const g = svgEl("g", { "data-act": act, "data-id": id, "data-orig": id, style: "cursor:pointer" });
+  const t = svgEl("title", {});
+  t.textContent = title;
+  g.appendChild(t);
+  g.appendChild(svgEl("rect", {
+    x, y, width: n.w, height: n.h, rx: 3,
+    fill: isSel ? "#e7f0fa" : nodeFill(n),
+    stroke: isSel || isMatch ? "#2f6fad" : "#c8c8c8",
+    "stroke-width": isSel ? 2.2 : isMatch ? 1.6 : 0.7,
+    "stroke-dasharray": dashed ? "4 2" : "0",
+  }));
+  const bar = barColor(n);
+  if (bar) g.appendChild(svgEl("rect", { x, y, width: 4, height: n.h, fill: bar }));
+  const text = svgEl("text", { x: x + (bar ? 10 : 6), y: y + 13, "font-size": 10, fill: "#1c1c1c" });
+  text.textContent = trunc(label, 38);
+  g.appendChild(text);
+  return g;
+}
+
+function choose(id) {
+  state.untangled = false;
+  state.selected = id;
+  lastScrolled = null;
+  render();
+}
+
+function boot() {
+  const root = document.getElementById("app");
+  root.addEventListener("click", (ev) => {
+    const t = ev.target.closest("[data-act]");
+    if (!t || !root.contains(t)) return;
+    const act = t.getAttribute("data-act");
+    if (act === "reset") choose(null);
+    else if (act === "scale") { state.scale = Number(t.getAttribute("data-z")); render(); }
+    else if (act === "untangle") { state.untangled = !state.untangled; lastScrolled = null; render(); }
+    else if (act === "hit") { state.query = ""; choose(t.getAttribute("data-id")); }
+    else if (act === "choose") choose(t.getAttribute("data-id"));
+    else if (act === "copy") {
+      const orig = t.getAttribute("data-orig");
+      if (orig !== state.selected) choose(orig);
+    }
+  });
+  window.addEventListener("keydown", (e) => { if (e.key === "Escape") choose(null); });
+  render();
+}
+
+(function (root) {
+  root.LockoApp = { LAYOUT, computeChain, computeChainLayout, crossingsOf, DATA };
+})(typeof window !== "undefined" ? window : globalThis);
+
+if (typeof document !== "undefined") boot();
+
+</script>
+</body>
+</html>
